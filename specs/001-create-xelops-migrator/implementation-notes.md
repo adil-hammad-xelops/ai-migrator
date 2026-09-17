@@ -147,3 +147,16 @@ claim a task complete before its stated acceptance check has actually passed.
   focused structural tests. Backend strict typecheck, lint, build and all 31 unit tests pass.
 - Real target dependency installation and Angular compilation remain intentionally owned by
   profile admission and generated-project validation tasks T039-T042.
+
+## T032 Status: Dependency planner (2026-09-17)
+
+- Added an evidence-driven dependency planner that normalizes actual external import
+  subpaths, combines them with trusted build requirements and source manifest/lockfile
+  evidence, and requires an admitted target profile before selecting target versions.
+- Decisions distinguish preserved, removed, replaced and manual-review dependencies with
+  source/target versions and reasons. React runtimes and source build plugins never flow
+  into the target manifest; routing/forms replacements require admitted Angular packages.
+- Used unsupported or undeclared packages produce explicit blocking preservation findings,
+  including the affected behavior and source files when known. The planner accepts no
+  source scripts or lockfile contents for copying.
+- Verification: five focused dependency tests, strict typecheck and full lint pass.
