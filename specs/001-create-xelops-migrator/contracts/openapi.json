@@ -1,0 +1,1376 @@
+{
+  "openapi": "3.1.1",
+  "info": {
+    "title": "Xelops AI Migrator API",
+    "version": "1.0.0",
+    "description": "Single trusted-team backend. Mapping status is independent of job success: retained native UI may be unmapped, but required behavior blockers or any failed/skipped validation prevent completion. Reports contain one decision per detected occurrence. All six validation gate names must occur exactly once. Report artifact checksums are intentionally omitted to avoid self-referential ZIP content; status is authoritative for artifact availability. POST creates a new attempt on every accepted request; no idempotency guarantee."
+  },
+  "servers": [
+    {
+      "url": "http://127.0.0.1:3000"
+    }
+  ],
+  "security": [
+    {
+      "bearerAuth": []
+    }
+  ],
+  "paths": {
+    "/api/migrations": {
+      "post": {
+        "operationId": "startMigration",
+        "summary": "Durably accept one project ZIP",
+        "description": "Only transport and intake limits are checked before acceptance. Corrupt project archives accepted as complete uploads receive a migration ID and terminal failure reports. No source execution occurs during intake.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "project": {
+                    "type": "string",
+                    "format": "binary"
+                  }
+                },
+                "required": [
+                  "project"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Accepted after durable receipt",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Accepted"
+                }
+              }
+            },
+            "headers": {
+              "Location": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "Migration status URL"
+              }
+            }
+          },
+          "400": {
+            "description": "Malformed parameters or request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid bearer token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Upload exceeds configured limit",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "Unsupported media type",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Submission rate or queue capacity exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Storage/service unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/migrations/{migrationId}": {
+      "parameters": [
+        {
+          "name": "migrationId",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ],
+      "get": {
+        "operationId": "getMigrationStatus",
+        "responses": {
+          "200": {
+            "description": "Current status with actual artifact availability",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Status"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Malformed parameters or request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid bearer token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Unknown or expired migration",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Storage/service unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/migrations/{migrationId}/report": {
+      "parameters": [
+        {
+          "name": "migrationId",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ],
+      "get": {
+        "operationId": "getMigrationReport",
+        "parameters": [
+          {
+            "name": "format",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "json",
+                "md"
+              ],
+              "default": "json"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Published terminal report in the requested format",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Report"
+                }
+              },
+              "text/markdown": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "202": {
+            "description": "Terminal report is pending",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Pending"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Malformed parameters or request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid bearer token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Unknown or expired report",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Storage/service unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/migrations/{migrationId}/download": {
+      "parameters": [
+        {
+          "name": "migrationId",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ],
+      "get": {
+        "operationId": "downloadFinalZip",
+        "responses": {
+          "200": {
+            "description": "Verified validated Angular project and both reports",
+            "headers": {
+              "Content-Disposition": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/zip": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Malformed parameters or request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid bearer token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Unknown migration or expired artifact",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Migration active or failed; no validated final artifact",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Storage/service unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/migrations/{migrationId}/diagnostic-download": {
+      "parameters": [
+        {
+          "name": "migrationId",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ],
+      "get": {
+        "operationId": "downloadDiagnosticZip",
+        "responses": {
+          "200": {
+            "description": "Failed partial output, clearly labeled incomplete",
+            "headers": {
+              "Content-Disposition": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/zip": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Malformed parameters or request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid bearer token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Unknown migration or expired artifact",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Diagnostic artifact unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Storage/service unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer"
+      }
+    },
+    "schemas": {
+      "Error": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "code": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "message"
+        ]
+      },
+      "State": {
+        "type": "string",
+        "enum": [
+          "accepted",
+          "running",
+          "completed",
+          "failed"
+        ]
+      },
+      "Stage": {
+        "type": "string",
+        "enum": [
+          "Analyzer",
+          "Mapper",
+          "Generator",
+          "Validator",
+          "Reporter",
+          "ZIP Exporter"
+        ]
+      },
+      "Finding": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "code": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          },
+          "severity": {
+            "type": "string",
+            "enum": [
+              "warning",
+              "error"
+            ]
+          },
+          "sourceFiles": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "code",
+          "message",
+          "severity",
+          "sourceFiles"
+        ]
+      },
+      "StageOutcome": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "stage": {
+            "$ref": "#/components/schemas/Stage"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "pending",
+              "running",
+              "completed",
+              "failed",
+              "skipped"
+            ]
+          },
+          "startedAt": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "endedAt": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "stage",
+          "status",
+          "startedAt",
+          "endedAt",
+          "reason"
+        ]
+      },
+      "Counts": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "detected": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "mapped": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "unmapped": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "manualReview": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "required": [
+          "detected",
+          "mapped",
+          "unmapped",
+          "manualReview"
+        ]
+      },
+      "Artifact": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "available": {
+            "type": "boolean"
+          },
+          "url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "sha256": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "bytes": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "expiresAt": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "available",
+          "url",
+          "sha256",
+          "bytes",
+          "expiresAt"
+        ]
+      },
+      "Links": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "status": {
+            "type": "string"
+          },
+          "report": {
+            "type": "string"
+          },
+          "download": {
+            "type": "string"
+          },
+          "diagnosticDownload": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "status",
+          "report",
+          "download",
+          "diagnosticDownload"
+        ]
+      },
+      "Accepted": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "migrationId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "state": {
+            "const": "accepted"
+          },
+          "links": {
+            "$ref": "#/components/schemas/Links"
+          }
+        },
+        "required": [
+          "migrationId",
+          "state",
+          "links"
+        ]
+      },
+      "Pending": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "migrationId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "accepted",
+              "running"
+            ]
+          },
+          "reportAvailable": {
+            "const": false
+          }
+        },
+        "required": [
+          "migrationId",
+          "state",
+          "reportAvailable"
+        ]
+      },
+      "Status": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "migrationId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "state": {
+            "$ref": "#/components/schemas/State"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "currentStage": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Stage"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "stages": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/StageOutcome"
+            }
+          },
+          "reportAvailable": {
+            "type": "boolean"
+          },
+          "counts": {
+            "$ref": "#/components/schemas/Counts"
+          },
+          "coverage": {
+            "type": "string",
+            "enum": [
+              "complete",
+              "partial",
+              "unknown"
+            ]
+          },
+          "finalArtifact": {
+            "$ref": "#/components/schemas/Artifact"
+          },
+          "diagnosticArtifact": {
+            "$ref": "#/components/schemas/Artifact"
+          },
+          "warnings": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Finding"
+            }
+          },
+          "errors": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Finding"
+            }
+          },
+          "expiresAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "migrationId",
+          "state",
+          "createdAt",
+          "updatedAt",
+          "currentStage",
+          "stages",
+          "reportAvailable",
+          "counts",
+          "coverage",
+          "finalArtifact",
+          "diagnosticArtifact",
+          "warnings",
+          "errors",
+          "expiresAt"
+        ]
+      },
+      "File": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "path": {
+            "type": "string"
+          },
+          "disposition": {
+            "type": "string",
+            "enum": [
+              "analyzed",
+              "excluded",
+              "failed"
+            ]
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "roles": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "path",
+          "disposition",
+          "reason",
+          "roles"
+        ]
+      },
+      "Element": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "sourceFile": {
+            "type": "string"
+          },
+          "sourceElement": {
+            "type": "string"
+          },
+          "line": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 1
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "role": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "sourceFile",
+          "sourceElement",
+          "line",
+          "role"
+        ]
+      },
+      "Mapping": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "elementId": {
+            "type": "string"
+          },
+          "sourceFile": {
+            "type": "string"
+          },
+          "sourceElement": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "mapped",
+              "unmapped",
+              "manual-review"
+            ]
+          },
+          "targetComponent": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "reasonCode": {
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          },
+          "candidates": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "preservedRequirements": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "unresolvedRequirements": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "elementId",
+          "sourceFile",
+          "sourceElement",
+          "status",
+          "targetComponent",
+          "reasonCode",
+          "reason",
+          "candidates",
+          "preservedRequirements",
+          "unresolvedRequirements"
+        ]
+      },
+      "GeneratedFile": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "path": {
+            "type": "string"
+          },
+          "sha256": {
+            "type": "string"
+          },
+          "sourceFiles": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "path",
+          "sha256",
+          "sourceFiles"
+        ]
+      },
+      "Dependency": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "sourcePackage": {
+            "type": "string"
+          },
+          "sourceVersion": {
+            "anyOf": [
+              { "type": "string" },
+              { "type": "null" }
+            ]
+          },
+          "targetPackage": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "targetVersion": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "decision": {
+            "type": "string",
+            "enum": [
+              "preserved",
+              "removed",
+              "replaced",
+              "manual-review"
+            ]
+          },
+          "reason": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "sourcePackage",
+          "sourceVersion",
+          "targetPackage",
+          "targetVersion",
+          "decision",
+          "reason"
+        ]
+      },
+      "Preservation": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "sourceFiles": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "behavior": {
+            "type": "string"
+          },
+          "outcome": {
+            "type": "string",
+            "enum": [
+              "preserved",
+              "adapted",
+              "manual-review",
+              "unsupported"
+            ]
+          },
+          "blocking": {
+            "type": "boolean"
+          },
+          "reason": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "sourceFiles",
+          "behavior",
+          "outcome",
+          "blocking",
+          "reason"
+        ]
+      },
+      "Validation": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "gate": {
+            "type": "string",
+            "enum": [
+              "installation",
+              "typescript",
+              "angular-build",
+              "lint",
+              "tests",
+              "xelops-compliance"
+            ]
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "passed",
+              "failed",
+              "skipped"
+            ]
+          },
+          "command": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "toolVersion": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "exitCode": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "durationMs": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "diagnostics": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "gate",
+          "status",
+          "command",
+          "toolVersion",
+          "exitCode",
+          "durationMs",
+          "reason",
+          "diagnostics"
+        ]
+      },
+      "Report": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "schemaVersion": {
+            "const": "1.0.0"
+          },
+          "revision": {
+            "type": "string"
+          },
+          "migrationId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "outcome": {
+            "type": "string",
+            "enum": [
+              "completed",
+              "failed"
+            ]
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "sourceFramework": {
+            "type": "string",
+            "enum": [
+              "react",
+              "angular",
+              "unknown",
+              "mixed"
+            ]
+          },
+          "sourceVersion": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "targetFramework": {
+            "const": "angular"
+          },
+          "targetProfileId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "architectureRevision": {
+            "const": "xelops-angular-v1"
+          },
+          "catalog": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "revision": {
+                "type": "string"
+              },
+              "sha256": {
+                "type": "string"
+              },
+              "entryCount": {
+                "type": "integer",
+                "minimum": 0
+              }
+            },
+            "required": [
+              "revision",
+              "sha256",
+              "entryCount"
+            ]
+          },
+          "coverage": {
+            "type": "string",
+            "enum": [
+              "complete",
+              "partial",
+              "unknown"
+            ]
+          },
+          "counts": {
+            "$ref": "#/components/schemas/Counts"
+          },
+          "analyzedFiles": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/File"
+            }
+          },
+          "detectedUiElements": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Element"
+            }
+          },
+          "mappings": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Mapping"
+            }
+          },
+          "generatedFiles": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/GeneratedFile"
+            }
+          },
+          "dependencyDecisions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Dependency"
+            }
+          },
+          "preservationFindings": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Preservation"
+            }
+          },
+          "validationResults": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Validation"
+            },
+            "minItems": 6,
+            "maxItems": 6
+          },
+          "stages": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/StageOutcome"
+            }
+          },
+          "warnings": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Finding"
+            }
+          },
+          "errors": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Finding"
+            }
+          }
+        },
+        "required": [
+          "schemaVersion",
+          "revision",
+          "migrationId",
+          "outcome",
+          "createdAt",
+          "sourceFramework",
+          "sourceVersion",
+          "targetFramework",
+          "targetProfileId",
+          "architectureRevision",
+          "catalog",
+          "coverage",
+          "counts",
+          "analyzedFiles",
+          "detectedUiElements",
+          "mappings",
+          "generatedFiles",
+          "dependencyDecisions",
+          "preservationFindings",
+          "validationResults",
+          "stages",
+          "warnings",
+          "errors"
+        ]
+      }
+    }
+  }
+}
