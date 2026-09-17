@@ -11,7 +11,9 @@ export default tseslint.config(
             "profiles/**/generated/**",
             "jobs/**",
             "eslint.config.mjs",
-            "profiles/**/*.d.ts"
+            "profiles/**/*.d.ts",
+            "tests/fixtures/react-supported/**",
+            "tests/fixtures/angular-supported/**"
         ]
     },
     js.configs.recommended,

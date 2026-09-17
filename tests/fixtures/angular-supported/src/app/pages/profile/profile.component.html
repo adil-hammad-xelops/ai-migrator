@@ -1,0 +1,7 @@
+<section class="profile">
+  <h1>Profile</h1>
+  @if (user) {
+    <app-user-card [user]="user" />
+  }
+  <app-contact-form (submitted)="handleContactSubmit($event)" />
+</section>

@@ -29,5 +29,9 @@
         "tests/**/*.ts",
         "scripts/**/*.mjs",
         "vitest.config.ts"
+    ],
+    "exclude": [
+        "tests/fixtures/react-supported/**",
+        "tests/fixtures/angular-supported/**"
     ]
 }

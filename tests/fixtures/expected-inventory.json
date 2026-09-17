@@ -1,0 +1,71 @@
+{
+  "react": {
+    "framework": "react",
+    "frameworkVersion": "18.3.1",
+    "applicationRoot": "tests/fixtures/react-supported",
+    "routes": [
+      { "path": "/", "component": "HomePage", "sourceFile": "src/pages/HomePage.tsx" },
+      { "path": "/profile", "component": "ProfilePage", "sourceFile": "src/pages/ProfilePage.tsx" }
+    ],
+    "sharedComponents": [
+      { "name": "UserCard", "sourceFile": "src/components/UserCard.tsx", "usedBy": ["HomePage", "ProfilePage"] }
+    ],
+    "models": [{ "name": "User", "sourceFile": "src/models/User.ts", "fields": ["id", "name", "email"] }],
+    "services": [{ "name": "fetchUser", "sourceFile": "src/services/userService.ts", "callsApi": true }],
+    "forms": [
+      {
+        "name": "ContactForm",
+        "sourceFile": "src/components/ContactForm.tsx",
+        "fields": ["name", "message"],
+        "hasValidation": true,
+        "hasReset": true
+      }
+    ],
+    "state": [{ "kind": "context", "sourceFile": "src/state/UserContext.tsx", "usesReducer": true }],
+    "styles": [{ "sourceFile": "src/pages/ProfilePage.module.css", "kind": "css-module", "scope": "component" }],
+    "detectedUiElementRoleCounts": {
+      "button": 2,
+      "input": 1,
+      "textarea": 1
+    }
+  },
+  "angular": {
+    "framework": "angular",
+    "frameworkVersion": "20.3.15",
+    "applicationRoot": "tests/fixtures/angular-supported",
+    "routes": [
+      { "path": "", "component": "HomeComponent", "sourceFile": "src/app/pages/home/home.component.ts" },
+      { "path": "profile", "component": "ProfileComponent", "sourceFile": "src/app/pages/profile/profile.component.ts" }
+    ],
+    "sharedComponents": [
+      {
+        "name": "UserCardComponent",
+        "sourceFile": "src/app/components/user-card/user-card.component.ts",
+        "usedBy": ["HomeComponent", "ProfileComponent"]
+      }
+    ],
+    "models": [{ "name": "User", "sourceFile": "src/app/models/user.model.ts", "fields": ["id", "name", "email"] }],
+    "services": [
+      { "name": "UserService", "sourceFile": "src/app/services/user.service.ts", "callsApi": true },
+      { "name": "UserStore", "sourceFile": "src/app/state/user.store.ts", "callsApi": false }
+    ],
+    "forms": [
+      {
+        "name": "ContactFormComponent",
+        "sourceFile": "src/app/components/contact-form/contact-form.component.ts",
+        "fields": ["name", "message"],
+        "hasValidation": true,
+        "hasReset": true
+      }
+    ],
+    "state": [{ "kind": "signal", "sourceFile": "src/app/state/user.store.ts", "usesReducer": false }],
+    "styles": [
+      { "sourceFile": "src/app/pages/profile/profile.component.css", "kind": "css", "scope": "component" }
+    ],
+    "detectedUiElementRoleCounts": {
+      "button": 2,
+      "input": 1,
+      "textarea": 1
+    }
+  }
+}
