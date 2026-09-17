@@ -1,8 +1,12 @@
 # Implementation Plan: Xelops AI Migrator
 
-**Branch**: No Git branch created; feature identifier `001-create-xelops-migrator`.
+**Repository**: `https://github.com/adil-hammad-xelops/ai-migrator.git` (`origin`).
+**Branch**: `main` is the current integration branch; feature identifier
+`001-create-xelops-migrator` is tracked in this repository.
 **Date**: 2026-09-17 | **Spec**: [spec.md](spec.md)
 **Input**: Feature specification and user-requested Node.js/strict TypeScript architecture.
+**Delivery**: Implementation changes are committed to this repository and pushed to
+`origin` through the normal review workflow. Do not create a second repository.
 **Status**: Phase 1 design complete; package/profile activation checks remain required
 before successful-generation integration. No implementation or runtime validation is claimed.
 

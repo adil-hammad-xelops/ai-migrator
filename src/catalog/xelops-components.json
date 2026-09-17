@@ -1,0 +1,763 @@
+{
+  "button": {
+    "selector": "xlp-button",
+    "importPath": "@xelops-ui/angular",
+    "description": "Clickable control used to trigger an action or submit a form.",
+    "inputs": [
+      "variant",
+      "size",
+      "disabled",
+      "loading",
+      "iconStart",
+      "iconEnd",
+      "iconOnly",
+      "type"
+    ],
+    "outputs": [
+      "xlpClick"
+    ]
+  },
+  "badge": {
+    "selector": "xlp-badge",
+    "importPath": "@xelops-ui/angular",
+    "description": "Small label used to display counts, statuses, or short metadata.",
+    "inputs": [
+      "variant",
+      "size"
+    ]
+  },
+  "tag": {
+    "selector": "xlp-tag",
+    "importPath": "@xelops-ui/angular",
+    "description": "Compact, optionally dismissible label representing a category, filter, or selection.",
+    "inputs": [
+      "variant",
+      "dismissible"
+    ],
+    "outputs": [
+      "dismissed"
+    ]
+  },
+  "avatar": {
+    "selector": "xlp-avatar",
+    "importPath": "@xelops-ui/angular",
+    "description": "Displays a user or entity image, initials, or icon.",
+    "inputs": [
+      "src",
+      "name",
+      "size",
+      "shape"
+    ]
+  },
+  "avatar-group": {
+    "selector": "xlp-avatar-group",
+    "importPath": "@xelops-ui/angular",
+    "description": "Displays a stacked group of avatars with an overflow count.",
+    "inputs": [
+      "avatars",
+      "max",
+      "size"
+    ]
+  },
+  "spinner": {
+    "selector": "xlp-spinner",
+    "importPath": "@xelops-ui/angular",
+    "description": "Indicates a loading or in-progress state.",
+    "inputs": [
+      "size"
+    ]
+  },
+  "divider": {
+    "selector": "xlp-divider",
+    "importPath": "@xelops-ui/angular",
+    "description": "Visually separates content with a horizontal or vertical line.",
+    "inputs": [
+      "orientation",
+      "label"
+    ]
+  },
+  "card": {
+    "selector": "xlp-card",
+    "importPath": "@xelops-ui/angular",
+    "description": "Container for grouping related content with header, body, and footer sections.",
+    "usage": "Sub-elements: xlp-card-header, xlp-card-body, xlp-card-footer",
+    "inputs": [
+      "variant"
+    ]
+  },
+  "alert": {
+    "selector": "xlp-alert",
+    "importPath": "@xelops-ui/angular",
+    "description": "Displays an inline, optionally dismissible message to communicate status or feedback.",
+    "inputs": [
+      "variant",
+      "title",
+      "dismissible"
+    ],
+    "outputs": [
+      "dismissed"
+    ]
+  },
+  "skeleton": {
+    "selector": "xlp-skeleton",
+    "importPath": "@xelops-ui/angular",
+    "description": "Placeholder used to indicate loading content before it renders.",
+    "inputs": [
+      "shape",
+      "width",
+      "height"
+    ]
+  },
+  "progress": {
+    "selector": "xlp-progress",
+    "importPath": "@xelops-ui/angular",
+    "description": "Displays the completion progress of a task as a bar.",
+    "inputs": [
+      "value",
+      "max",
+      "variant",
+      "label"
+    ]
+  },
+  "label": {
+    "selector": "xlp-label",
+    "importPath": "@xelops-ui/angular",
+    "description": "Text label associated with a form control.",
+    "inputs": [
+      "for",
+      "required"
+    ]
+  },
+  "kbd": {
+    "selector": "xlp-kbd",
+    "importPath": "@xelops-ui/angular",
+    "description": "Displays a styled representation of a keyboard key or shortcut.",
+    "inputs": []
+  },
+  "status": {
+    "selector": "xlp-status",
+    "importPath": "@xelops-ui/angular",
+    "description": "Indicates the current state of an entity (online, active, pending, etc.).",
+    "inputs": [
+      "variant",
+      "size"
+    ]
+  },
+  "input": {
+    "selector": "xlp-input",
+    "importPath": "@xelops-ui/angular",
+    "description": "Attribute directive that styles native <input>/<textarea> elements.",
+    "usage": "Attribute directive — apply to <input> or <textarea>",
+    "inputs": [
+      "size",
+      "invalid"
+    ]
+  },
+  "checkbox": {
+    "selector": "xlp-checkbox",
+    "importPath": "@xelops-ui/angular",
+    "description": "Binary selection control implementing ControlValueAccessor.",
+    "usage": "Implements ControlValueAccessor",
+    "inputs": [
+      "disabled"
+    ]
+  },
+  "toggle": {
+    "selector": "xlp-toggle",
+    "importPath": "@xelops-ui/angular",
+    "description": "Switch control for turning a boolean value on or off.",
+    "usage": "Implements ControlValueAccessor",
+    "inputs": [
+      "disabled"
+    ]
+  },
+  "radio": {
+    "selector": "xlp-radio",
+    "importPath": "@xelops-ui/angular",
+    "description": "Single selectable option within an xlp-radio-group.",
+    "usage": "Must be wrapped in xlp-radio-group",
+    "inputs": [
+      "value"
+    ]
+  },
+  "radio-group": {
+    "selector": "xlp-radio-group",
+    "importPath": "@xelops-ui/angular",
+    "description": "Container that manages a set of mutually exclusive radio options.",
+    "usage": "Implements ControlValueAccessor",
+    "inputs": [
+      "orientation"
+    ]
+  },
+  "select": {
+    "selector": "xlp-select",
+    "importPath": "@xelops-ui/angular",
+    "description": "Dropdown control for selecting a single value from a list.",
+    "usage": "Implements ControlValueAccessor",
+    "inputs": [
+      "placeholder",
+      "size"
+    ]
+  },
+  "autocomplete": {
+    "selector": "xlp-autocomplete",
+    "importPath": "@xelops-ui/angular",
+    "description": "Text input with type-ahead suggestions.",
+    "inputs": [
+      "options",
+      "placeholder",
+      "size",
+      "minChars"
+    ],
+    "outputs": [
+      "valueChange",
+      "searchChange"
+    ]
+  },
+  "combobox": {
+    "selector": "xlp-combobox",
+    "importPath": "@xelops-ui/angular",
+    "description": "Searchable dropdown for selecting from a list of options.",
+    "inputs": [
+      "options",
+      "placeholder",
+      "searchPlaceholder"
+    ]
+  },
+  "number-input": {
+    "selector": "xlp-number-input",
+    "importPath": "@xelops-ui/angular",
+    "description": "Numeric input with min/max/step controls.",
+    "inputs": [
+      "min",
+      "max",
+      "step",
+      "size"
+    ]
+  },
+  "otp-input": {
+    "selector": "xlp-otp-input",
+    "importPath": "@xelops-ui/angular",
+    "description": "Segmented input for entering one-time passcodes.",
+    "inputs": [
+      "length",
+      "type",
+      "disabled"
+    ]
+  },
+  "slider": {
+    "selector": "xlp-slider",
+    "importPath": "@xelops-ui/angular",
+    "description": "Control for selecting a numeric value along a track.",
+    "usage": "Implements ControlValueAccessor",
+    "inputs": [
+      "showValue",
+      "variant"
+    ]
+  },
+  "rating": {
+    "selector": "xlp-rating",
+    "importPath": "@xelops-ui/angular",
+    "description": "Control for selecting a rating value (e.g., stars).",
+    "inputs": [
+      "max",
+      "disabled"
+    ]
+  },
+  "segmented-control": {
+    "selector": "xlp-segmented-control",
+    "importPath": "@xelops-ui/angular",
+    "description": "Group of mutually exclusive options displayed as connected segments.",
+    "inputs": [
+      "options",
+      "size"
+    ]
+  },
+  "tag-input": {
+    "selector": "xlp-tag-input",
+    "importPath": "@xelops-ui/angular",
+    "description": "Input for adding and removing multiple tags.",
+    "inputs": [
+      "placeholder",
+      "max"
+    ]
+  },
+  "color-picker": {
+    "selector": "xlp-color-picker",
+    "importPath": "@xelops-ui/angular",
+    "description": "Control for selecting a color from presets or a custom picker.",
+    "inputs": [
+      "presets",
+      "disabled"
+    ]
+  },
+  "date-picker": {
+    "selector": "xlp-date-picker",
+    "importPath": "@xelops-ui/angular",
+    "description": "Control for selecting a date from a calendar popup.",
+    "inputs": [
+      "placeholder",
+      "size"
+    ]
+  },
+  "time-picker": {
+    "selector": "xlp-time-picker",
+    "importPath": "@xelops-ui/angular",
+    "description": "Control for selecting a time value.",
+    "inputs": [
+      "use12Hour",
+      "minuteStep"
+    ]
+  },
+  "tooltip": {
+    "selector": "[xlpTooltip]",
+    "importPath": "@xelops-ui/angular",
+    "description": "Directive that shows contextual text on hover or focus.",
+    "usage": "Directive — apply to any element",
+    "inputs": [
+      "xlpTooltip",
+      "placement"
+    ]
+  },
+  "menu": {
+    "selector": "xlp-menu",
+    "importPath": "@xelops-ui/angular",
+    "description": "Dropdown menu of actions, opened via a trigger element.",
+    "usage": "Open via [xlpMenuTriggerFor]=\"menuRef\" on any element",
+    "outputs": [
+      "closed"
+    ]
+  },
+  "dialog": {
+    "selector": "xlp-dialog",
+    "importPath": "@xelops-ui/angular",
+    "description": "Modal dialog opened programmatically via XlpDialogService.",
+    "usage": "Opened programmatically via XlpDialogService.open(component, config)",
+    "inputs": []
+  },
+  "popover": {
+    "selector": "xlp-popover",
+    "importPath": "@xelops-ui/angular",
+    "description": "Floating panel anchored to a trigger element.",
+    "inputs": [
+      "ariaLabel"
+    ],
+    "outputs": [
+      "closed"
+    ]
+  },
+  "drawer": {
+    "selector": "xlp-drawer",
+    "importPath": "@xelops-ui/angular",
+    "description": "Panel that slides in from an edge of the screen.",
+    "inputs": [
+      "side",
+      "width",
+      "height",
+      "title"
+    ],
+    "outputs": [
+      "closed"
+    ]
+  },
+  "context-menu": {
+    "selector": "xlp-context-menu",
+    "importPath": "@xelops-ui/angular",
+    "description": "Menu triggered by a right-click or context action.",
+    "usage": "Sub-element: xlp-context-menu-separator",
+    "outputs": [
+      "closed"
+    ]
+  },
+  "command-palette": {
+    "selector": "xlp-command-palette",
+    "importPath": "@xelops-ui/angular",
+    "description": "Searchable list of commands, typically opened via keyboard shortcut.",
+    "inputs": [
+      "commands",
+      "placeholder"
+    ],
+    "outputs": [
+      "commandSelected"
+    ]
+  },
+  "toast": {
+    "selector": "xlp-toast-container",
+    "importPath": "@xelops-ui/angular",
+    "description": "Container for transient notification (toast) messages.",
+    "usage": "Place once in app shell. Dispatch via XlpToastService.show({ variant, message })",
+    "inputs": []
+  },
+  "tabs": {
+    "selector": "xlp-tabs",
+    "importPath": "@xelops-ui/angular",
+    "description": "Container for organizing content into selectable tab panels.",
+    "usage": "Children must be xlp-tab elements",
+    "inputs": []
+  },
+  "tab": {
+    "selector": "xlp-tab",
+    "importPath": "@xelops-ui/angular",
+    "description": "Individual tab panel within an xlp-tabs container.",
+    "inputs": [
+      "label",
+      "disabled"
+    ]
+  },
+  "accordion": {
+    "selector": "xlp-accordion",
+    "importPath": "@xelops-ui/angular",
+    "description": "Container for collapsible content panels.",
+    "usage": "Children must be xlp-accordion-panel elements",
+    "inputs": [
+      "multi"
+    ]
+  },
+  "accordion-panel": {
+    "selector": "xlp-accordion-panel",
+    "importPath": "@xelops-ui/angular",
+    "description": "Individual collapsible panel within an xlp-accordion.",
+    "inputs": [
+      "title"
+    ]
+  },
+  "breadcrumb": {
+    "selector": "xlp-breadcrumb",
+    "importPath": "@xelops-ui/angular",
+    "description": "Displays a navigational path of links.",
+    "inputs": [
+      "items"
+    ]
+  },
+  "pagination": {
+    "selector": "xlp-pagination",
+    "importPath": "@xelops-ui/angular",
+    "description": "Control for navigating between pages of data.",
+    "inputs": [
+      "page",
+      "total",
+      "pageSize",
+      "siblingCount"
+    ],
+    "outputs": [
+      "pageChange"
+    ]
+  },
+  "nav": {
+    "selector": "xlp-nav",
+    "importPath": "@xelops-ui/angular",
+    "description": "Primary navigation list of links or items.",
+    "inputs": [
+      "items",
+      "activeId"
+    ],
+    "outputs": [
+      "navSelect"
+    ]
+  },
+  "topbar": {
+    "selector": "xlp-topbar",
+    "importPath": "@xelops-ui/angular",
+    "description": "Top application bar / header container.",
+    "inputs": [
+      "height"
+    ]
+  },
+  "stepper": {
+    "selector": "xlp-stepper",
+    "importPath": "@xelops-ui/angular",
+    "description": "Displays progress through a sequence of steps.",
+    "inputs": [
+      "steps"
+    ]
+  },
+  "data-table": {
+    "selector": "xlp-data-table",
+    "importPath": "@xelops-ui/angular",
+    "description": "Tabular display of data with sorting, striping, and row states.",
+    "inputs": [
+      "columns",
+      "rows",
+      "caption",
+      "striped",
+      "bordered",
+      "compact",
+      "emptyText",
+      "rowTrackBy",
+      "rowState",
+      "rowSelected"
+    ],
+    "outputs": [
+      "sortChange"
+    ]
+  },
+  "donut-chart": {
+    "selector": "xlp-donut-chart",
+    "importPath": "@xelops-ui/angular",
+    "description": "Circular chart displaying proportional data slices.",
+    "inputs": [
+      "slices",
+      "size",
+      "variant",
+      "label"
+    ]
+  },
+  "metric-bar": {
+    "selector": "xlp-metric-bar",
+    "importPath": "@xelops-ui/angular",
+    "description": "Displays a labeled metric as a horizontal bar.",
+    "inputs": [
+      "label",
+      "value",
+      "max",
+      "variant"
+    ]
+  },
+  "timeline": {
+    "selector": "xlp-timeline",
+    "importPath": "@xelops-ui/angular",
+    "description": "Container for chronological timeline items.",
+    "usage": "Children must be xlp-timeline-item elements",
+    "inputs": []
+  },
+  "timeline-item": {
+    "selector": "xlp-timeline-item",
+    "importPath": "@xelops-ui/angular",
+    "description": "Individual event entry within an xlp-timeline.",
+    "inputs": [
+      "label",
+      "time",
+      "variant"
+    ]
+  },
+  "list": {
+    "selector": "xlp-list",
+    "importPath": "@xelops-ui/angular",
+    "description": "Container for a vertical list of items.",
+    "usage": "Children must be xlp-list-item elements",
+    "inputs": []
+  },
+  "list-item": {
+    "selector": "xlp-list-item",
+    "importPath": "@xelops-ui/angular",
+    "description": "Individual selectable item within an xlp-list.",
+    "inputs": [
+      "description"
+    ],
+    "outputs": [
+      "itemSelect"
+    ]
+  },
+  "checkbox-tree": {
+    "selector": "xlp-checkbox-tree",
+    "importPath": "@xelops-ui/angular",
+    "description": "Hierarchical tree of checkboxes for multi-selection.",
+    "outputs": [
+      "itemsChange"
+    ]
+  },
+  "tree": {
+    "selector": "xlp-tree",
+    "importPath": "@xelops-ui/angular",
+    "description": "Hierarchical list of selectable/expandable nodes.",
+    "inputs": [
+      "nodes"
+    ],
+    "outputs": [
+      "nodeSelect"
+    ]
+  },
+  "virtual-list": {
+    "selector": "xlp-virtual-list",
+    "importPath": "@xelops-ui/angular",
+    "description": "Efficiently renders large lists using virtual scrolling.",
+    "inputs": [
+      "items",
+      "itemHeight"
+    ]
+  },
+  "sortable-list": {
+    "selector": "xlp-sortable-list",
+    "importPath": "@xelops-ui/angular",
+    "description": "List that supports drag-and-drop reordering.",
+    "inputs": [
+      "showHandle"
+    ],
+    "outputs": [
+      "reordered"
+    ]
+  },
+  "carousel": {
+    "selector": "xlp-carousel",
+    "importPath": "@xelops-ui/angular",
+    "description": "Rotating container of slides.",
+    "usage": "Children must be xlp-carousel-slide elements",
+    "inputs": [
+      "loop",
+      "autoplay",
+      "interval",
+      "showArrows"
+    ],
+    "outputs": [
+      "slideChange"
+    ]
+  },
+  "carousel-slide": {
+    "selector": "xlp-carousel-slide",
+    "importPath": "@xelops-ui/angular",
+    "description": "Individual slide within an xlp-carousel.",
+    "inputs": []
+  },
+  "shell-layout": {
+    "selector": "xlp-shell-layout",
+    "importPath": "@xelops-ui/angular",
+    "description": "Configurable application shell layout with resizable rows.",
+    "inputs": [
+      "initialRows"
+    ]
+  },
+  "notification-drawer": {
+    "selector": "xlp-notification-drawer",
+    "importPath": "@xelops-ui/angular",
+    "description": "Slide-out panel listing notifications.",
+    "inputs": [
+      "title",
+      "notifications",
+      "width"
+    ],
+    "outputs": [
+      "dismiss",
+      "dismissAll"
+    ]
+  },
+  "notification-item": {
+    "selector": "xlp-notification-item",
+    "importPath": "@xelops-ui/angular",
+    "description": "Individual notification entry.",
+    "inputs": [
+      "notification"
+    ],
+    "outputs": [
+      "dismiss"
+    ]
+  },
+  "account-menu": {
+    "selector": "xlp-account-menu",
+    "importPath": "@xelops-ui/angular",
+    "description": "Dropdown menu for account-related actions.",
+    "outputs": [
+      "itemSelect"
+    ]
+  },
+  "flex": {
+    "selector": "xlp-flex",
+    "importPath": "@xelops-ui/angular",
+    "description": "Generic flexbox layout container.",
+    "inputs": [
+      "preset",
+      "direction",
+      "wrap",
+      "justify",
+      "align",
+      "gap",
+      "rowGap",
+      "columnGap",
+      "inline"
+    ]
+  },
+  "row": {
+    "selector": "xlp-row",
+    "importPath": "@xelops-ui/angular",
+    "description": "Horizontal flexbox layout container.",
+    "inputs": [
+      "preset",
+      "wrap",
+      "justify",
+      "align",
+      "gap",
+      "inline"
+    ]
+  },
+  "column": {
+    "selector": "xlp-column",
+    "importPath": "@xelops-ui/angular",
+    "description": "Vertical flexbox layout container.",
+    "inputs": [
+      "preset",
+      "wrap",
+      "justify",
+      "align",
+      "gap",
+      "inline"
+    ]
+  },
+  "grid": {
+    "selector": "xlp-grid",
+    "importPath": "@xelops-ui/angular",
+    "description": "CSS grid layout container.",
+    "inputs": [
+      "preset",
+      "columns",
+      "rows",
+      "areas",
+      "autoFlow",
+      "gap",
+      "rowGap",
+      "columnGap",
+      "alignItems",
+      "justifyItems",
+      "alignContent",
+      "justifyContent",
+      "inline"
+    ]
+  },
+  "resizable-panels": {
+    "selector": "xlp-resizable-panels",
+    "importPath": "@xelops-ui/angular",
+    "description": "Two-panel layout with a draggable divider.",
+    "inputs": [
+      "direction",
+      "initialSplit"
+    ],
+    "outputs": [
+      "splitChange"
+    ]
+  },
+  "callout": {
+    "selector": "xlp-callout",
+    "importPath": "@xelops-ui/angular",
+    "description": "Highlighted block of contextual information.",
+    "inputs": [
+      "title",
+      "type"
+    ]
+  },
+  "empty-state": {
+    "selector": "xlp-empty-state",
+    "importPath": "@xelops-ui/angular",
+    "description": "Placeholder shown when there is no data to display.",
+    "inputs": [
+      "description"
+    ]
+  },
+  "code-block": {
+    "selector": "xlp-code-block",
+    "importPath": "@xelops-ui/angular",
+    "description": "Displays formatted source code with an optional copy button.",
+    "inputs": [
+      "language",
+      "showCopy"
+    ]
+  },
+  "drop-zone": {
+    "selector": "xlp-drop-zone",
+    "importPath": "@xelops-ui/angular",
+    "description": "Area for drag-and-drop or click-to-upload file selection.",
+    "inputs": [
+      "accept",
+      "multiple",
+      "maxSize",
+      "disabled"
+    ]
+  }
+}

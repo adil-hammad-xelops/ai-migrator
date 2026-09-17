@@ -1,0 +1,32 @@
+{
+  "name": "@xelops-ui/angular",
+  "version": "0.0.5",
+  "publishConfig": {
+    "registry": "https://nexus.xelops.ma/repository/npm_repo"
+  },
+  "peerDependencies": {
+    "@angular/common": "^20.3.15",
+    "@angular/core": "^20.3.15",
+    "@angular/cdk": "^20.2.14"
+  },
+  "dependencies": {
+    "tslib": "^2.3.0"
+  },
+  "sideEffects": false,
+  "bin": {
+    "xlp-sync-skills": "./bin/sync-skills.mjs"
+  },
+  "agentskills": "./llms.txt",
+  "llms": "./llms.txt",
+  "module": "fesm2022/xelops-ui-angular.mjs",
+  "typings": "index.d.ts",
+  "exports": {
+    "./package.json": {
+      "default": "./package.json"
+    },
+    ".": {
+      "types": "./index.d.ts",
+      "default": "./fesm2022/xelops-ui-angular.mjs"
+    }
+  }
+}

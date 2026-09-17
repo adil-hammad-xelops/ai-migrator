@@ -1,0 +1,17 @@
+{
+    "packageName": "@xelops-ui/angular",
+    "packageVersion": "0.0.5",
+    "integrity": "sha512-KqXwjsKio/mYpOGq7w6VgV74J3No6a/w1xI38vV9MtAO1BcN3SjFVMLwV/E8OpPK93dCwFaVkjfGCmtOSLZqOA==",
+    "registry": "https://nexus.xelops.ma/repository/npm_repo",
+    "declarationFile": "xelops-ui-angular-0.0.5.d.ts",
+    "peerDependencies": {
+        "@angular/common": "^20.3.15",
+        "@angular/core": "^20.3.15",
+        "@angular/cdk": "^20.2.14"
+    },
+    "dependencies": {
+        "tslib": "^2.3.0"
+    },
+    "capturedAt": "2026-09-17",
+    "note": "Captured via `npm pack` through the authenticated nexus registry (see .npmrc, gitignored). The declaration file is pinned real evidence, not fetched live on every validator run."
+}

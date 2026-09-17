@@ -1,0 +1,13 @@
+node_modules/
+dist/
+coverage/
+*.log
+.env
+.env.*
+!.env.example
+.npmrc
+jobs/
+.DS_Store
+Thumbs.db
+*.tmp
+*.swp

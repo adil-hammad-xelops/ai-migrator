@@ -1,6 +1,9 @@
 # Feature Specification: Xelops AI Migrator
 
-**Feature Branch**: Not created; this workspace has no Git branch-creation hook.
+**Repository**: `https://github.com/adil-hammad-xelops/ai-migrator.git`.
+
+**Feature Branch**: Work is tracked on the repository's `main` integration branch unless
+a separate implementation branch is created by the maintainer.
 
 **Feature Directory**: `specs/001-create-xelops-migrator`
 
@@ -763,3 +766,8 @@ category in User Story 4. Expected outcomes are established before evaluating th
   recovery policy and measurable operational budgets in the implementation plan. The plan
   must supply concrete values and validation evidence before their dependent implementation;
   no assumption of unrestricted uploads, infinite retention, or public access is made.
+- **Repository delivery**: The project is maintained in the Git repository identified above.
+  Implementation work, task progress, tests and documentation changes MUST be committed
+  there. Pushes use the configured `origin` remote and the repository's review workflow;
+  repository credentials MUST NOT be placed in source files, reports, generated ZIPs or
+  migration artifacts.
