@@ -6,15 +6,16 @@ Current branch: `main`
 
 ## Current status
 
-The project is in the foundation phase. The Node.js/TypeScript setup, strict compiler
-rules, catalog loading, storage primitives, archive intake, sandbox runner, initial report
-generation and foundation tests are prepared. Tasks T001–T018 are marked complete in
-`specs/001-create-xelops-migrator/tasks.md`.
+The project is in the US1 core-transformation phase. Foundation tasks T001–T018 and
+US1 tasks T019–T033 are complete. React and Angular source analysis, evidence-gated
+Xelops mapping, the strict Angular architecture-v1 template, dependency planning and
+deterministic Angular path/file emission are implemented and verified.
 
-The next work is the real migration flow: analyze a React or Angular project, map its UI,
-generate Angular, validate it, report the result and export a ZIP.
+The next work starts at T034: behavior-preserving React transforms, followed by Angular,
+forms/API and style transforms, generator composition, profile admission, compliance,
+six-gate validation and migration API orchestration.
 
-Progress: **19 / 68 tasks complete**.
+Progress: **33 / 68 tasks complete**.
 
 ## Each part in simple words
 
@@ -53,7 +54,8 @@ inventory  decisions  Angular    six gates  JSON/MD      verified ZIP
 
 ## Next milestones
 
-- [ ] T019–T045: complete source analysis, mapping, Angular generation and validation.
+- [x] T019–T033: analyze source, map UI, establish the Angular template, plan dependencies and emit deterministic architecture-owned files.
+- [ ] T034–T045: complete behavior/style transforms, generator composition, profile admission, validation and migration API orchestration.
 - [ ] T046–T050: complete JSON/Markdown reporting and report API.
 - [ ] T051–T056: complete verified final ZIP delivery.
 - [ ] T057–T063: complete failure recovery and diagnostic ZIP delivery.
