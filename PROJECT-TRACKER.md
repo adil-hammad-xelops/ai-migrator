@@ -14,7 +14,7 @@ generation and foundation tests are prepared. Tasks T001–T018 are marked compl
 The next work is the real migration flow: analyze a React or Angular project, map its UI,
 generate Angular, validate it, report the result and export a ZIP.
 
-Progress: **18 / 68 tasks complete**.
+Progress: **19 / 68 tasks complete**.
 
 ## Each part in simple words
 

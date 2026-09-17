@@ -5,9 +5,9 @@ import type { User } from "../models/user.model";
 
 @Injectable({ providedIn: "root" })
 export class UserService {
-  public constructor(private readonly http: HttpClient) {}
+    public constructor(private readonly http: HttpClient) { }
 
-  public fetchUser(id: string): Observable<User> {
-    return this.http.get<User>(`/api/users/${id}`);
-  }
+    public fetchUser(id: string): Observable<User> {
+        return this.http.get<User>(`/api/users/${id}`);
+    }
 }

@@ -1,18 +1,18 @@
 <form [formGroup]="form" (ngSubmit)="handleSubmit()">
-  <label>
-    Name
-    <input formControlName="name" />
-  </label>
-  @if (form.controls.name.invalid && form.controls.name.touched) {
+    <label>
+        Name
+        <input formControlName="name" />
+    </label>
+    @if (form.controls.name.invalid && form.controls.name.touched) {
     <span role="alert">Name is required</span>
-  }
-  <label>
-    Message
-    <textarea formControlName="message"></textarea>
-  </label>
-  @if (form.controls.message.invalid && form.controls.message.touched) {
+    }
+    <label>
+        Message
+        <textarea formControlName="message"></textarea>
+    </label>
+    @if (form.controls.message.invalid && form.controls.message.touched) {
     <span role="alert">Message must be at least 5 characters</span>
-  }
-  <button type="submit">Send</button>
-  <button type="button" (click)="handleReset()">Reset</button>
+    }
+    <button type="submit">Send</button>
+    <button type="button" (click)="handleReset()">Reset</button>
 </form>
