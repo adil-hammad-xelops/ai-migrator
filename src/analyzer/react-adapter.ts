@@ -4,6 +4,7 @@ import { resolve } from 'path';
 import type {
     SourceFile,
     FrameworkEvidence,
+    SourceSpan,
 } from './models.js';
 
 /**
@@ -32,7 +33,7 @@ export interface ReactFinding {
 }
 
 export interface ReactAnalysis {
-    components: Array<{
+    components: {
         name: string;
         sourceFile: string;
         isPage: boolean;
@@ -40,45 +41,61 @@ export interface ReactAnalysis {
         jsxElements: string[];
         props: Record<string, string>;
         hooks: string[];
-    }>;
-    routes: Array<{
+        span: SourceSpan;
+    }[];
+    routes: {
         path: string;
         component: string;
+        sourceFile: string;
         params: string[];
         guards: string[];
         lazy: boolean;
-    }>;
-    forms: Array<{
+        span: SourceSpan;
+    }[];
+    forms: {
         name: string;
         sourceFile: string;
         fields: string[];
         validation: Record<string, unknown>;
         handlers: string[];
-    }>;
-    state: Array<{
+    }[];
+    state: {
         type: 'useState' | 'useReducer' | 'useContext' | 'ref';
         name: string;
         sourceFile: string;
         usage: string[];
-    }>;
-    models: Array<{
+    }[];
+    models: {
         name: string;
         sourceFile: string;
         properties: Record<string, string>;
         isInterface: boolean;
-    }>;
-    services: Array<{
+    }[];
+    services: {
         name: string;
         sourceFile: string;
         methods: string[];
-        apiCalls: Array<{ method: string; url: string }>;
-    }>;
-    findings: Array<{
+        apiCalls: { method: string; url: string }[];
+    }[];
+    uiElements: ReactUiElement[];
+    findings: {
         code: string;
         message: string;
         sourceFile: string;
         startLine: number;
-    }>;
+    }[];
+}
+
+export interface ReactUiElement {
+    sourceElement: string;
+    sourceFile: string;
+    properties: string[];
+    events: string[];
+    states: string[];
+    accessibilityRequirements: string[];
+    bindingReferences: string[];
+    attributeValues: Readonly<Record<string, string>>;
+    span: SourceSpan;
 }
 
 /**
@@ -97,6 +114,7 @@ export async function analyzeReact(
             state: [],
             models: [],
             services: [],
+            uiElements: [],
             findings: [
                 {
                     code: 'NOT_REACT',
@@ -114,6 +132,7 @@ export async function analyzeReact(
     const state: ReactAnalysis['state'] = [];
     const models: ReactAnalysis['models'] = [];
     const services: ReactAnalysis['services'] = [];
+    const uiElements: ReactAnalysis['uiElements'] = [];
     const findings: ReactAnalysis['findings'] = [];
 
     // Process TypeScript/JavaScript files
@@ -141,6 +160,7 @@ export async function analyzeReact(
                 services,
                 findings,
             });
+            uiElements.push(...extractReactUiElements(sourceFile, file.path));
         } catch (error) {
             findings.push({
                 code: 'PARSE_ERROR',
@@ -158,6 +178,7 @@ export async function analyzeReact(
         state,
         models,
         services,
+        uiElements,
         findings,
     };
 }
@@ -190,10 +211,7 @@ function walkReactAST(
             ts.isArrowFunction(node)
         ) {
             const name = getNodeName(node);
-            if (name && isLikelyComponent(name, sourceText, node.getStart())) {
-                const start = sourceFile.getLineAndCharacterOfPosition(node.getStart());
-                const end = sourceFile.getLineAndCharacterOfPosition(node.getEnd());
-
+            if (name && isLikelyComponent(name)) {
                 ctx.components.push({
                     name,
                     sourceFile: filePath,
@@ -202,6 +220,7 @@ function walkReactAST(
                     jsxElements: extractJSXElements(node),
                     props: extractPropsFromComponent(node),
                     hooks: extractHooksUsed(node),
+                    span: toSourceSpan(sourceFile, node, filePath),
                 });
             }
         }
@@ -212,9 +231,6 @@ function walkReactAST(
             ts.isTypeAliasDeclaration(node)
         ) {
             const name = node.name.text;
-            const start = sourceFile.getLineAndCharacterOfPosition(node.getStart());
-            const end = sourceFile.getLineAndCharacterOfPosition(node.getEnd());
-
             ctx.models.push({
                 name,
                 sourceFile: filePath,
@@ -259,15 +275,21 @@ function walkReactAST(
                     });
                 }
             }
-        }
 
-        // Detect router configuration
-        if (isRouterElement(node, sourceText)) {
-            extractRoutes(node, filePath, ctx.routes);
+            const calledName = node.expression.getText();
+            if (isReactHookName(calledName) && hasUncertainHookTiming(node)) {
+                const start = sourceFile.getLineAndCharacterOfPosition(node.getStart());
+                ctx.findings.push({
+                    code: 'REACT_UNCERTAIN_HOOK_TIMING',
+                    message: `Hook ${calledName} is conditional or nested, so execution timing requires review`,
+                    sourceFile: filePath,
+                    startLine: start.line + 1,
+                });
+            }
         }
 
         // Detect forms
-        if (isFormElement(node, sourceText)) {
+        if (isFormElement(node)) {
             extractFormInfo(node, filePath, ctx.forms);
         }
 
@@ -290,14 +312,73 @@ function walkReactAST(
         ts.forEachChild(node, visit);
     }
 
+    extractRoutes(sourceFile, filePath, ctx.routes, ctx.findings);
     visit(sourceFile);
+}
+
+function toSourceSpan(
+    sourceFile: ts.SourceFile,
+    node: ts.Node,
+    filePath: string
+): SourceSpan {
+    const start = sourceFile.getLineAndCharacterOfPosition(node.getStart(sourceFile));
+    const end = sourceFile.getLineAndCharacterOfPosition(node.getEnd());
+    return {
+        path: filePath,
+        startLine: start.line + 1,
+        startColumn: start.character + 1,
+        endLine: end.line + 1,
+        endColumn: end.character + 1,
+    };
+}
+
+function isReactHookName(name: string): boolean {
+    const unqualified = name.split('.').at(-1) ?? name;
+    return /^use[A-Z0-9]/.test(unqualified);
+}
+
+function hasUncertainHookTiming(node: ts.CallExpression): boolean {
+    let current = node.parent;
+    while (!ts.isSourceFile(current)) {
+        if (
+            ts.isIfStatement(current) ||
+            ts.isConditionalExpression(current) ||
+            ts.isSwitchStatement(current) ||
+            ts.isForStatement(current) ||
+            ts.isForInStatement(current) ||
+            ts.isForOfStatement(current) ||
+            ts.isWhileStatement(current) ||
+            ts.isDoStatement(current) ||
+            ts.isTryStatement(current)
+        ) {
+            return true;
+        }
+        if (ts.isFunctionLike(current)) {
+            if (
+                ts.isFunctionDeclaration(current) &&
+                current.name !== undefined &&
+                isLikelyComponent(current.name.text)
+            ) {
+                return false;
+            }
+            if (
+                (ts.isArrowFunction(current) || ts.isFunctionExpression(current)) &&
+                ts.isVariableDeclaration(current.parent)
+            ) {
+                return !isLikelyComponent(current.parent.name.getText());
+            }
+            return true;
+        }
+        current = current.parent;
+    }
+    return true;
 }
 
 /**
  * Get declaration name
  */
 function getNodeName(node: ts.Node): string | null {
-    if (ts.isFunctionDeclaration(node)) return node.name?.text || null;
+    if (ts.isFunctionDeclaration(node)) return node.name?.text ?? null;
     if (ts.isVariableDeclaration(node)) return node.name.getText() || null;
     if (ts.isInterfaceDeclaration(node)) return node.name.text;
     if (ts.isTypeAliasDeclaration(node)) return node.name.text;
@@ -307,7 +388,7 @@ function getNodeName(node: ts.Node): string | null {
 /**
  * Check if name looks like a React component (PascalCase)
  */
-function isLikelyComponent(name: string, _sourceText: string, _start: number): boolean {
+function isLikelyComponent(name: string): boolean {
     return /^[A-Z]/.test(name);
 }
 
@@ -342,14 +423,101 @@ function extractJSXElements(node: ts.Node): string[] {
 
     function collectJSX(n: ts.Node): void {
         if (ts.isJsxElement(n) || ts.isJsxSelfClosingElement(n)) {
-            const tagName = n.tagName?.getText?.() || 'unknown';
+            const tagName = getJsxTagName(n);
             elements.push(tagName);
         }
         ts.forEachChild(n, collectJSX);
     }
 
     collectJSX(node);
-    return [...new Set(elements)];
+    return elements;
+}
+
+function getJsxTagName(node: ts.JsxElement | ts.JsxSelfClosingElement): string {
+    return ts.isJsxElement(node)
+        ? node.openingElement.tagName.getText()
+        : node.tagName.getText();
+}
+
+function extractReactUiElements(
+    sourceFile: ts.SourceFile,
+    filePath: string
+): ReactUiElement[] {
+    const elements: ReactUiElement[] = [];
+
+    function visit(node: ts.Node): void {
+        if (ts.isJsxElement(node) || ts.isJsxSelfClosingElement(node)) {
+            const opening = ts.isJsxElement(node) ? node.openingElement : node;
+            const properties: string[] = [];
+            const events: string[] = [];
+            const states: string[] = [];
+            const accessibilityRequirements: string[] = [];
+            const bindingReferences: string[] = [];
+            const attributeValues: Record<string, string> = {};
+
+            for (const attribute of opening.attributes.properties) {
+                if (ts.isJsxSpreadAttribute(attribute)) {
+                    bindingReferences.push(attribute.expression.getText());
+                    continue;
+                }
+                const name = attribute.name.getText();
+                const initializer = attribute.initializer;
+                const isEvent = /^on[A-Z]/.test(name);
+                if (isEvent) events.push(name);
+                else properties.push(name);
+                if (
+                    name.startsWith('aria-') ||
+                    name === 'role' ||
+                    name === 'tabIndex' ||
+                    name === 'alt' ||
+                    name === 'label'
+                ) {
+                    accessibilityRequirements.push(name);
+                }
+                if (
+                    name === 'disabled' ||
+                    name === 'checked' ||
+                    name === 'selected' ||
+                    name === 'readOnly' ||
+                    name === 'required' ||
+                    name === 'loading' ||
+                    name === 'value'
+                ) {
+                    states.push(name);
+                }
+                if (initializer === undefined) {
+                    attributeValues[name] = 'true';
+                } else if (ts.isStringLiteral(initializer)) {
+                    attributeValues[name] = initializer.text;
+                } else if (
+                    ts.isJsxExpression(initializer) &&
+                    initializer.expression !== undefined
+                ) {
+                    const expression = initializer.expression.getText();
+                    bindingReferences.push(expression);
+                    if (ts.isStringLiteralLike(initializer.expression)) {
+                        attributeValues[name] = initializer.expression.text;
+                    }
+                }
+            }
+
+            elements.push({
+                sourceElement: opening.tagName.getText(),
+                sourceFile: filePath,
+                properties,
+                events,
+                states,
+                accessibilityRequirements,
+                bindingReferences,
+                attributeValues,
+                span: toSourceSpan(sourceFile, node, filePath),
+            });
+        }
+        ts.forEachChild(node, visit);
+    }
+
+    visit(sourceFile);
+    return elements;
 }
 
 /**
@@ -360,7 +528,7 @@ function extractPropsFromComponent(node: ts.Node): Record<string, string> {
 
     if (ts.isFunctionDeclaration(node) && node.parameters.length > 0) {
         const firstParam = node.parameters[0];
-        if (firstParam.type) {
+        if (firstParam?.type) {
             const typeText = firstParam.type.getText();
             if (typeText.startsWith('{')) {
                 // Parse simple prop destructuring
@@ -386,7 +554,7 @@ function extractHooksUsed(node: ts.Node): string[] {
 
     function findHooks(n: ts.Node): void {
         if (ts.isCallExpression(n)) {
-            const name = n.expression.getText?.();
+            const name = n.expression.getText();
             if (
                 name &&
                 (name.startsWith('use') || name.includes('useCallback') || name.includes('useMemo'))
@@ -405,8 +573,7 @@ function extractHooksUsed(node: ts.Node): string[] {
  * Extract hook call name
  */
 function extractHookCall(node: ts.CallExpression): string | null {
-    const expression = node.expression.getText?.();
-    if (!expression) return null;
+    const expression = node.expression.getText();
 
     if (
         expression === 'useState' ||
@@ -428,17 +595,17 @@ function extractProperties(node: ts.Node): Record<string, string> {
 
     if (ts.isInterfaceDeclaration(node)) {
         node.members.forEach((member) => {
-            if (ts.isPropertySignature(member) && member.name) {
-                properties[member.name.getText()] = member.type?.getText?.() || 'unknown';
+            if (ts.isPropertySignature(member)) {
+                properties[member.name.getText()] = member.type?.getText() ?? 'unknown';
             }
         });
     }
 
-    if (ts.isTypeAliasDeclaration(node) && node.type) {
+    if (ts.isTypeAliasDeclaration(node)) {
         if (ts.isTypeLiteralNode(node.type)) {
             node.type.members.forEach((member) => {
-                if (ts.isPropertySignature(member) && member.name) {
-                    properties[member.name.getText()] = member.type?.getText?.() || 'unknown';
+                if (ts.isPropertySignature(member)) {
+                    properties[member.name.getText()] = member.type?.getText() ?? 'unknown';
                 }
             });
         }
@@ -448,62 +615,72 @@ function extractProperties(node: ts.Node): Record<string, string> {
 }
 
 /**
- * Check if node is router element
- */
-function isRouterElement(node: ts.Node, _sourceText: string): boolean {
-    if (!ts.isVariableDeclaration(node)) return false;
-
-    const initializer = node.initializer;
-    if (!initializer) return false;
-
-    const text = initializer.getText?.() || '';
-    return (
-        text.includes('BrowserRouter') ||
-        text.includes('Routes') ||
-        text.includes('createBrowserRouter') ||
-        text.includes('createRoutesFromElements')
-    );
-}
-
-/**
  * Extract routes from router configuration
  */
 function extractRoutes(
     node: ts.Node,
     filePath: string,
-    routes: ReactAnalysis['routes']
+    routes: ReactAnalysis['routes'],
+    findings: ReactAnalysis['findings']
 ): void {
     function findRoutes(n: ts.Node): void {
-        if (ts.isJsxElement(n)) {
-            const tagName = n.tagName?.getText?.();
+        if (ts.isJsxElement(n) || ts.isJsxSelfClosingElement(n)) {
+            const tagName = getJsxTagName(n);
             if (tagName === 'Route' || tagName === 'Outlet') {
                 // Extract path and component from JSX attributes
-                const attributes = n.openingElement.attributes;
+                const attributes = ts.isJsxElement(n)
+                    ? n.openingElement.attributes
+                    : n.attributes;
                 let path = '';
                 let component = '';
                 const params: string[] = [];
+                let pathIsDynamic = false;
 
-                attributes.forEach((attr) => {
-                    if (ts.isJsxAttribute(attr) && attr.name.text === 'path') {
-                        path = attr.initializer?.getText?.() || '';
+                for (const attr of attributes.properties) {
+                    const attributeName = ts.isJsxAttribute(attr)
+                        ? attr.name.getText()
+                        : '';
+                    if (ts.isJsxAttribute(attr) && attributeName === 'path') {
+                        const staticPath = getStaticJsxAttributeValue(attr);
+                        if (staticPath === undefined) {
+                            pathIsDynamic = true;
+                        } else {
+                            path = staticPath;
+                        }
                         // Extract route params like :id from path
                         const paramMatches = path.match(/:(\w+)/g);
                         if (paramMatches) {
                             paramMatches.forEach((p) => params.push(p.substring(1)));
                         }
                     }
-                    if (ts.isJsxAttribute(attr) && attr.name.text === 'element') {
-                        component = attr.initializer?.getText?.() || '';
+                    if (ts.isJsxAttribute(attr) && attributeName === 'element') {
+                        component = getRouteComponent(attr);
                     }
-                });
+                }
+
+                if (pathIsDynamic) {
+                    const sourceFile = n.getSourceFile();
+                    const start = sourceFile.getLineAndCharacterOfPosition(
+                        n.getStart(sourceFile)
+                    );
+                    findings.push({
+                        code: 'REACT_DYNAMIC_ROUTE',
+                        message: 'Dynamic route path cannot be resolved statically',
+                        sourceFile: filePath,
+                        startLine: start.line + 1,
+                    });
+                    return;
+                }
 
                 if (path) {
                     routes.push({
                         path,
                         component,
+                        sourceFile: filePath,
                         params,
                         guards: [],
                         lazy: component.includes('React.lazy'),
+                        span: toSourceSpan(n.getSourceFile(), n, filePath),
                     });
                 }
             }
@@ -514,17 +691,44 @@ function extractRoutes(
     findRoutes(node);
 }
 
+function getStaticJsxAttributeValue(attribute: ts.JsxAttribute): string | undefined {
+    const initializer = attribute.initializer;
+    if (initializer === undefined) return undefined;
+    if (ts.isStringLiteral(initializer)) return initializer.text;
+    if (
+        ts.isJsxExpression(initializer) &&
+        initializer.expression !== undefined &&
+        ts.isStringLiteralLike(initializer.expression)
+    ) {
+        return initializer.expression.text;
+    }
+    return undefined;
+}
+
+function getRouteComponent(attribute: ts.JsxAttribute): string {
+    const initializer = attribute.initializer;
+    if (!initializer || !ts.isJsxExpression(initializer)) return '';
+    const expression = initializer.expression;
+    if (expression && ts.isJsxSelfClosingElement(expression)) {
+        return expression.tagName.getText();
+    }
+    if (expression && ts.isJsxElement(expression)) {
+        return expression.openingElement.tagName.getText();
+    }
+    return expression?.getText() ?? '';
+}
+
 /**
  * Check if node is form element
  */
-function isFormElement(node: ts.Node, _sourceText: string): boolean {
+function isFormElement(node: ts.Node): boolean {
     if (!ts.isJsxElement(node) && !ts.isJsxSelfClosingElement(node)) return false;
 
-    const tagName = node.tagName?.getText?.();
+    const tagName = getJsxTagName(node);
     return (
         tagName === 'form' ||
         tagName === 'Form' ||
-        node.getText?.().includes('handleSubmit')
+        node.getText().includes('handleSubmit')
     );
 }
 
@@ -536,11 +740,11 @@ function extractFormInfo(
     filePath: string,
     forms: ReactAnalysis['forms']
 ): void {
-    const formText = node.getText?.() || '';
+    const owner = findEnclosingFunction(node);
+    const formText = owner?.getText() ?? node.getText();
 
     // Extract form name from variable or component
-    const nameMatch = formText.match(/(?:const|let|function)\s+(\w+)/);
-    const formName = nameMatch ? nameMatch[1] : 'unknown_form';
+    const formName = owner?.name?.text ?? 'unknown_form';
 
     // Extract form fields
     const fields: string[] = [];
@@ -565,10 +769,23 @@ function extractFormInfo(
 
     forms.push({
         name: formName,
+        sourceFile: filePath,
         fields: [...new Set(fields)],
         validation,
-        handlers: ['onSubmit'],
+        handlers: [
+            ...(formText.includes('onSubmit') ? ['onSubmit'] : []),
+            ...(formText.includes('onReset') ? ['onReset'] : []),
+        ],
     });
+}
+
+function findEnclosingFunction(node: ts.Node): ts.FunctionDeclaration | undefined {
+    let current = node.parent;
+    while (!ts.isSourceFile(current)) {
+        if (ts.isFunctionDeclaration(current)) return current;
+        current = current.parent;
+    }
+    return undefined;
 }
 
 /**
@@ -590,18 +807,18 @@ function isLikelyService(name: string, sourceText: string): boolean {
  */
 function findAPICallsInNode(
     node: ts.Node
-): Array<{ method: string; url: string }> {
-    const calls: Array<{ method: string; url: string }> = [];
+): { method: string; url: string }[] {
+    const calls: { method: string; url: string }[] = [];
 
     function findCalls(n: ts.Node): void {
         if (ts.isCallExpression(n)) {
-            const expr = n.expression.getText?.() || '';
+            const expr = n.expression.getText();
             if (expr.includes('fetch') || expr.includes('axios') || expr.includes('http')) {
                 // Extract URL from first argument
                 if (n.arguments.length > 0) {
-                    const urlArg = n.arguments[0]?.getText?.() || '';
-                    const methodMatch = n.getText?.().match(/(get|post|put|delete|patch)/i);
-                    const method = methodMatch ? methodMatch[1].toUpperCase() : 'GET';
+                    const urlArg = n.arguments[0]?.getText() ?? '';
+                    const methodMatch = /(get|post|put|delete|patch)/i.exec(n.getText());
+                    const method = methodMatch?.[1]?.toUpperCase() ?? 'GET';
 
                     calls.push({
                         method,

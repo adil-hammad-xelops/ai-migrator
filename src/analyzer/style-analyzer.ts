@@ -1,5 +1,10 @@
 import { readFile } from 'fs/promises';
 import { resolve, extname } from 'path';
+import postcss from 'postcss';
+import selectorParser from 'postcss-selector-parser';
+import valueParser from 'postcss-value-parser';
+import scssParser from 'postcss-scss';
+import type { Root, Rule } from 'postcss';
 import type {
     SourceFile,
     FrameworkEvidence,
@@ -8,7 +13,7 @@ import type {
 /**
  * T026: Style analyzer
  * Parses CSS/SCSS files to detect CSS Modules, utilities, scoping, and asset references.
- * Uses trusted regex parsing, no execution of style plugins.
+ * Uses trusted PostCSS parsers without executing uploaded style plugins.
  */
 
 export interface StyleFinding {
@@ -37,23 +42,23 @@ export interface UtilityReference {
     framework: 'tailwind' | 'bootstrap' | 'material' | 'unknown';
     classes: string[];
     sourceFile: string;
-    contexts: Array<{ class: string; selector: string; lineNumber: number }>;
+    contexts: { class: string; selector: string; lineNumber: number }[];
 }
 
 export interface StyleAnalysis {
     cssModules: CSSModule[];
-    globalStyles: Array<{
+    globalStyles: {
         path: string;
         selectors: string[];
         scope: 'global' | 'nested';
-    }>;
+    }[];
     assets: StyleAsset[];
     utilities: UtilityReference[];
-    customProperties: Array<{
+    customProperties: {
         name: string;
         value: string;
         usage: number;
-    }>;
+    }[];
     findings: StyleFinding[];
 }
 
@@ -83,11 +88,15 @@ export async function analyzeStyles(
             const ext = extname(file.path).toLowerCase();
 
             if (ext === '.css' || ext === '.scss') {
+                const root = postcss.parse(source, {
+                    from: file.path,
+                    ...(ext === '.scss' ? { parser: scssParser } : {}),
+                });
                 // Detect CSS Module
                 const isCSSModule = detectCSSModule(file.path);
 
                 if (isCSSModule) {
-                    const classes = parseClassDefinitions(source);
+                    const classes = parseClassDefinitions(root);
                     cssModules.push({
                         path: file.path,
                         name: extractModuleName(file.path),
@@ -96,28 +105,38 @@ export async function analyzeStyles(
                     });
                 } else {
                     // Global styles
-                    const selectors = parseSelectors(source);
+                    const selectors = parseSelectors(root);
                     globalStyles.push({
                         path: file.path,
                         selectors,
-                        scope: detectScope(source),
+                        scope: detectScope(root),
                     });
                 }
 
                 // Extract assets (font-face, background images)
-                const foundAssets = extractAssets(source, file.path);
+                const foundAssets = extractAssets(root, file.path);
                 assets.push(...foundAssets);
+                for (const asset of foundAssets) {
+                    if (!asset.resolved) {
+                        findings.push({
+                            code: 'UNRESOLVED_ASSET',
+                            message: `Asset URL requires manual resolution: ${asset.url}`,
+                            sourceFile: asset.sourceFile,
+                            lineNumber: asset.lineNumber,
+                        });
+                    }
+                }
 
                 // Extract utility references (Tailwind, Bootstrap, etc.)
-                const foundUtilities = extractUtilities(source, file.path);
+                const foundUtilities = extractUtilities(root, file.path);
                 utilities.push(...foundUtilities);
 
                 // Extract custom properties
-                const props = extractCustomProperties(source);
+                const props = extractCustomProperties(root);
                 customProperties.push(...props);
 
                 // Validate and report findings
-                validateStyleFile(source, file.path, findings);
+                validateStyleFile(root, file.path, findings);
             }
         } catch (error) {
             findings.push({
@@ -156,7 +175,7 @@ function detectCSSModule(filePath: string): boolean {
  */
 function extractModuleName(filePath: string): string {
     const parts = filePath.split(/[/\\]/);
-    const fileName = parts[parts.length - 1];
+    const fileName = parts.at(-1) ?? filePath;
     return fileName.replace(/\.(module\.)?(css|scss)$/, '');
 }
 
@@ -164,19 +183,19 @@ function extractModuleName(filePath: string): string {
  * Parse class definitions from CSS/SCSS
  */
 function parseClassDefinitions(
-    source: string
+    root: Root
 ): Record<string, Record<string, string | string[]>> {
     const classes: Record<string, Record<string, string | string[]>> = {};
 
-    // Match .className { ... }
-    const classRegex = /\.([\w-]+)\s*\{([^}]*)\}/g;
-    let match;
-
-    while ((match = classRegex.exec(source)) !== null) {
-        const className = match[1];
-        const properties = parseProperties(match[2]);
-        classes[className] = properties;
-    }
+    root.walkRules((rule) => {
+        const ast = selectorParser().astSync(rule.selector);
+        ast.walkClasses((classNode) => {
+            classes[classNode.value] = {
+                ...(classes[classNode.value] ?? {}),
+                ...parseProperties(rule),
+            };
+        });
+    });
 
     return classes;
 }
@@ -184,20 +203,25 @@ function parseClassDefinitions(
 /**
  * Parse CSS properties from rule
  */
-function parseProperties(rule: string): Record<string, string | string[]> {
+function parseProperties(rule: Rule): Record<string, string | string[]> {
     const properties: Record<string, string | string[]> = {};
 
-    // Match property: value;
-    const propRegex = /([\w-]+)\s*:\s*([^;]*);/g;
-    let match;
-
-    while ((match = propRegex.exec(rule)) !== null) {
-        const propName = match[1].trim();
-        const propValue = match[2].trim();
-
-        // Handle multiple values (e.g., animations, shadows)
+    for (const node of rule.nodes) {
+        if (node.type !== 'decl') continue;
+        const propName = node.prop;
+        const propValue = node.value;
         if (propName === 'animation' || propName === 'box-shadow') {
-            properties[propName] = propValue.split(',').map((v) => v.trim());
+            properties[propName] = valueParser(propValue).nodes
+                .reduce<string[]>((values, valueNode) => {
+                    if (valueNode.type === 'div' && valueNode.value === ',') {
+                        values.push('');
+                    } else {
+                        const index = values.length - 1;
+                        values[index] = `${values[index] ?? ''}${valueParser.stringify(valueNode)}`;
+                    }
+                    return values;
+                }, [''])
+                .map((value) => value.trim());
         } else {
             properties[propName] = propValue;
         }
@@ -209,21 +233,13 @@ function parseProperties(rule: string): Record<string, string | string[]> {
 /**
  * Parse selectors from CSS/SCSS
  */
-function parseSelectors(source: string): string[] {
+function parseSelectors(root: Root): string[] {
     const selectors: string[] = [];
 
-    // Match any selector (class, id, element, pseudo, attribute)
-    const selectorRegex = /([.\w\-#:\[\]"'=\s>+~,]+)\s*\{/g;
-    let match;
-
-    while ((match = selectorRegex.exec(source)) !== null) {
-        const selector = match[1].trim();
-        // Split multiple selectors by comma
-        selector.split(',').forEach((s) => {
-            const trimmed = s.trim();
-            if (trimmed) selectors.push(trimmed);
-        });
-    }
+    root.walkRules((rule) => {
+        const ast = selectorParser().astSync(rule.selector);
+        for (const selector of ast.nodes) selectors.push(selector.toString().trim());
+    });
 
     return [...new Set(selectors)];
 }
@@ -231,69 +247,49 @@ function parseSelectors(source: string): string[] {
 /**
  * Detect scope (global vs nested/scoped)
  */
-function detectScope(source: string): 'global' | 'nested' {
-    // If contains :global or :local, it's explicitly scoped
-    if (source.includes(':global') || source.includes(':local')) {
-        return 'nested';
-    }
-
-    // Count nesting depth; if any @media/@supports, it has nesting
-    if (source.includes('@media') || source.includes('@supports')) {
-        return 'nested';
-    }
-
-    return 'global';
+function detectScope(root: Root): 'global' | 'nested' {
+    const rules: Rule[] = [];
+    root.walkRules((rule) => {
+        rules.push(rule);
+    });
+    const nested = rules.some((rule) =>
+            rule.selector.includes(':global') ||
+            rule.selector.includes(':local') ||
+            rule.parent?.type === 'rule' ||
+            (rule.parent?.type === 'atrule' &&
+                (rule.parent.name === 'media' || rule.parent.name === 'supports'))
+    );
+    return nested ? 'nested' : 'global';
 }
 
 /**
  * Extract asset references (fonts, images)
  */
 function extractAssets(
-    source: string,
+    root: Root,
     sourceFile: string
 ): StyleAsset[] {
     const assets: StyleAsset[] = [];
 
-    // Match url() references
-    const urlRegex = /url\(['"]?([^'")\s]+)['"]?\)/gi;
-    let match;
-    let lineNumber = 1;
-
-    while ((match = urlRegex.exec(source)) !== null) {
-        const url = match[1];
-        const type = getAssetType(url);
-
-        // Count line numbers up to this match
-        lineNumber = source.substring(0, match.index).split('\n').length;
-
-        assets.push({
-            url,
-            type,
-            resolved: !url.startsWith('http') && !url.includes('${'),
-            sourceFile,
-            lineNumber,
-        });
-    }
-
-    // Match @font-face references
-    const fontFaceRegex = /@font-face\s*\{([^}]*)\}/gi;
-    while ((match = fontFaceRegex.exec(source)) !== null) {
-        const fontRule = match[1];
-        const fontUrlMatch = /src\s*:\s*url\(['"]?([^'")\s]+)['"]?\)/i.exec(
-            fontRule
-        );
-        if (fontUrlMatch) {
-            lineNumber = source.substring(0, match.index).split('\n').length;
-
+    root.walkDecls((declaration) => {
+        const parsedValue = valueParser(declaration.value);
+        parsedValue.walk((node) => {
+            if (node.type !== 'function' || node.value.toLowerCase() !== 'url') return;
+            const rawUrl = valueParser.stringify(node.nodes).trim();
+            const url = rawUrl.replace(/^(['"])(.*)\1$/, '$2');
+            const inFontFace = declaration.parent?.type === 'atrule' &&
+                declaration.parent.name.toLowerCase() === 'font-face';
             assets.push({
-                url: fontUrlMatch[1],
-                type: 'font',
-                resolved: true,
+                url,
+                type: inFontFace ? 'font' : getAssetType(url),
+                resolved: !url.startsWith('http') &&
+                    !url.includes('${') &&
+                    !url.startsWith('data:'),
                 sourceFile,
-                lineNumber,
+                lineNumber: declaration.source?.start?.line ?? 1,
             });
-        }
-    }
+        });
+    });
 
     return assets;
 }
@@ -314,29 +310,35 @@ function getAssetType(url: string): 'image' | 'font' | 'unknown' {
  * Detect utility framework references (Tailwind, Bootstrap, Material)
  */
 function extractUtilities(
-    source: string,
+    root: Root,
     sourceFile: string
 ): UtilityReference[] {
     const utilities: UtilityReference[] = [];
-
-    // Detect Tailwind imports
-    if (source.includes('@tailwind')) {
-        const tailwindClasses = extractTailwindClasses(source);
-        if (tailwindClasses.length > 0) {
-            utilities.push({
-                framework: 'tailwind',
-                classes: tailwindClasses,
-                sourceFile,
-                contexts: [],
-            });
-        }
+    const atRules: { name: string; params: string }[] = [];
+    root.walkAtRules(({ name, params }) => {
+        atRules.push({
+            name: name.toLowerCase(),
+            params,
+        });
+    });
+    const tailwindRules = atRules.filter(({ name }) =>
+        name === 'tailwind' || name === 'apply'
+    );
+    const tailwindClasses = tailwindRules
+        .filter(({ name }) => name === 'apply')
+        .flatMap(({ params }) => params.split(/\s+/).filter(Boolean));
+    const hasTailwind = tailwindRules.length > 0;
+    const hasBootstrap = atRules.some(({ params }) => params.includes('bootstrap'));
+    const hasMaterial = atRules.some(({ params }) => params.includes('material'));
+    if (hasTailwind) {
+        utilities.push({
+            framework: 'tailwind',
+            classes: [...new Set(tailwindClasses)],
+            sourceFile,
+            contexts: [],
+        });
     }
-
-    // Detect Bootstrap imports
-    if (
-        source.includes('bootstrap/css') ||
-        source.includes('bootstrap-icons')
-    ) {
+    if (hasBootstrap) {
         utilities.push({
             framework: 'bootstrap',
             classes: [],
@@ -344,9 +346,7 @@ function extractUtilities(
             contexts: [],
         });
     }
-
-    // Detect Material Design
-    if (source.includes('material-icons') || source.includes('@angular/material')) {
+    if (hasMaterial) {
         utilities.push({
             framework: 'material',
             classes: [],
@@ -359,50 +359,30 @@ function extractUtilities(
 }
 
 /**
- * Extract Tailwind @layer directives
- */
-function extractTailwindClasses(source: string): string[] {
-    const classes: string[] = [];
-
-    // Match @apply directives and their class names
-    const applyRegex = /@apply\s+([\w\s-]+);/g;
-    let match;
-
-    while ((match = applyRegex.exec(source)) !== null) {
-        const classNames = match[1].split(/\s+/);
-        classes.push(...classNames);
-    }
-
-    return [...new Set(classes)];
-}
-
-/**
  * Extract CSS custom properties (variables)
  */
 function extractCustomProperties(
-    source: string
+    root: Root
 ): StyleAnalysis['customProperties'] {
     const properties: StyleAnalysis['customProperties'] = [];
     const propMap = new Map<string, { value: string; usage: number }>();
 
-    // Match --variable-name: value
-    const varRegex = /--([a-zA-Z0-9\-_]+)\s*:\s*([^;]+);/g;
-    let match;
-
-    while ((match = varRegex.exec(source)) !== null) {
-        const varName = `--${match[1]}`;
-        const value = match[2].trim();
-
-        if (!propMap.has(varName)) {
-            propMap.set(varName, { value, usage: 0 });
+    root.walkDecls((declaration) => {
+        if (declaration.prop.startsWith('--') && !propMap.has(declaration.prop)) {
+            propMap.set(declaration.prop, { value: declaration.value, usage: 0 });
         }
-    }
+    });
+    root.walkDecls((declaration) => {
+        valueParser(declaration.value).walk((node) => {
+            if (node.type !== 'function' || node.value !== 'var') return;
+            const referencedName = valueParser.stringify(node.nodes).split(',')[0]?.trim();
+            if (referencedName === undefined) return;
+            const property = propMap.get(referencedName);
+            if (property !== undefined) property.usage += 1;
+        });
+    });
 
-    // Count usage of each variable
     for (const [varName, data] of propMap) {
-        const usageRegex = new RegExp(`var\\(${varName}`, 'g');
-        const usages = source.match(usageRegex);
-        data.usage = usages ? usages.length : 0;
         properties.push({
             name: varName,
             value: data.value,
@@ -417,15 +397,13 @@ function extractCustomProperties(
  * Validate style file for common issues
  */
 function validateStyleFile(
-    source: string,
+    root: Root,
     sourceFile: string,
     findings: StyleFinding[]
 ): void {
-    let lineNumber = 1;
-
-    for (const line of source.split('\n')) {
-        // Check for unresolved dynamic values
-        if (line.includes('${') && !line.includes('//')) {
+    root.walkDecls((declaration) => {
+        const lineNumber = declaration.source?.start?.line ?? 1;
+        if (declaration.value.includes('${')) {
             findings.push({
                 code: 'UNRESOLVED_DYNAMIC',
                 message: 'Contains unresolved template/dynamic binding',
@@ -435,10 +413,11 @@ function validateStyleFile(
         }
 
         // Check for inline expressions
-        if (
-            line.includes('expression(') ||
-            line.includes('calc(')
-        ) {
+        const functions = new Set<string>();
+        valueParser(declaration.value).walk((node) => {
+            if (node.type === 'function') functions.add(node.value.toLowerCase());
+        });
+        if (functions.has('expression') || functions.has('calc')) {
             findings.push({
                 code: 'COMPLEX_VALUE',
                 message: 'Uses complex CSS expressions',
@@ -448,7 +427,7 @@ function validateStyleFile(
         }
 
         // Check for !important (generally a sign of poor cascade management)
-        if (line.includes('!important') && !line.trim().startsWith('//')) {
+        if (declaration.important) {
             findings.push({
                 code: 'IMPORTANT_FLAG',
                 message: 'Uses !important which may indicate specificity issues',
@@ -457,6 +436,5 @@ function validateStyleFile(
             });
         }
 
-        lineNumber++;
-    }
+    });
 }

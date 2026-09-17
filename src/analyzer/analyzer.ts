@@ -1,8 +1,10 @@
-import { resolve } from 'path';
 import type {
     SourceFile,
     FrameworkEvidence,
     AnalyzerFinding,
+    InventoryCoverage,
+    UiOccurrence,
+    UiSemanticRole,
 } from './models.js';
 import type { SourceInventoryResult } from './source-inventory.js';
 import type { ImportGraphResult } from './import-graph.js';
@@ -46,7 +48,7 @@ export interface DetectedOccurrence {
     startCol?: number;
     endCol?: number;
     evidence: string[];
-    blockers?: Array<{ code: string; message: string }>;
+    blockers?: { code: string; message: string }[];
 }
 
 export interface NormalizedProject {
@@ -58,6 +60,8 @@ export interface NormalizedProject {
 
     // Detected entities
     occurrences: DetectedOccurrence[];
+    uiOccurrences: UiOccurrence[];
+    coverage: InventoryCoverage;
 
     // Classification by type (derived from occurrences)
     pages: DetectedOccurrence[];
@@ -91,11 +95,11 @@ export interface NormalizedProject {
     findings: readonly AnalyzerFinding[];
 
     // Unparsed regions (partial analysis)
-    unparsedRegions: Array<{
+    unparsedRegions: {
         sourceFile: string;
         reason: string;
         region: { startLine: number; endLine: number };
-    }>;
+    }[];
 }
 
 /**
@@ -241,6 +245,7 @@ export async function analyzeProject(
         }
 
         // Stage 6: Compose normalized project
+        const uiOccurrences = composeUiOccurrences(reactAnalysis, angularAnalysis);
         const occurrences = composeOccurrences(
             sourceInventory,
             frameworkEvidence,
@@ -250,9 +255,9 @@ export async function analyzeProject(
         );
 
         // Assign deterministic IDs
-        const occurrencesWithIds = occurrences.map((occ, index) => ({
+        const occurrencesWithIds = occurrences.map((occ) => ({
             ...occ,
-            id: generateOccurrenceId(occ, index),
+            id: generateOccurrenceId(occ),
         }));
 
         // Collect unparsed regions
@@ -260,12 +265,31 @@ export async function analyzeProject(
             sourceInventory,
             occurrencesWithIds
         );
+        const analyzedUiFiles = sourceInventory.files.filter(
+            (file) =>
+                file.disposition === 'analyzed' &&
+                (file.roles.includes('script') || file.roles.includes('template'))
+        );
+        if (uiOccurrences.length === 0 && analyzedUiFiles.length > 0) {
+            findings.push({
+                code: 'ANALYSIS_ZERO_UI_PARTIAL',
+                message: 'Analyzed script/template files produced no UI occurrences; coverage cannot be complete',
+                sourceFiles: analyzedUiFiles.map(({ path }) => path),
+                severity: 'warning',
+            });
+        }
+        const coverage = determineCoverage(
+            frameworkEvidence,
+            sourceInventory.files,
+            findings,
+            uiOccurrences
+        );
 
         // Calculate statistics
         const stats = {
             totalFiles: sourceInventory.files.length,
-            analyzedFiles: sourceInventory.files.filter((f) =>
-                f.disposition.includes('script')
+            analyzedFiles: sourceInventory.files.filter(
+                (file) => file.disposition === 'analyzed'
             ).length,
             reachableFiles: importGraph.reachableFiles.size,
             unreachableFiles: importGraph.unreachableFiles.length,
@@ -289,10 +313,12 @@ export async function analyzeProject(
 
         return {
             framework: frameworkEvidence.framework,
-            frameworkVersion: frameworkEvidence.version || 'unknown',
+            frameworkVersion: frameworkEvidence.version ?? 'unknown',
             applicationRoot: rootDir,
             projectName: extractProjectName(rootDir),
             occurrences: occurrencesWithIds,
+            uiOccurrences,
+            coverage,
             pages,
             components,
             routes,
@@ -312,7 +338,8 @@ export async function analyzeProject(
         };
     } catch (error) {
         throw new Error(
-            `Analyzer failed at root: ${error instanceof Error ? error.message : 'unknown'}`
+            `Analyzer failed at root: ${error instanceof Error ? error.message : 'unknown'}`,
+            { cause: error }
         );
     }
 }
@@ -327,7 +354,7 @@ function determineEntryFiles(
     const entryFiles: string[] = [];
 
     // Framework-specific entry points
-    if (framework.bootstrapFiles && framework.bootstrapFiles.length > 0) {
+    if (framework.bootstrapFiles.length > 0) {
         entryFiles.push(...framework.bootstrapFiles);
     }
 
@@ -346,6 +373,126 @@ function determineEntryFiles(
     }
 
     return entryFiles;
+}
+
+function composeUiOccurrences(
+    reactAnalysis: ReactAnalysis | undefined,
+    angularAnalysis: AngularAnalysis | undefined
+): UiOccurrence[] {
+    const occurrences: UiOccurrence[] = [];
+
+    for (const element of reactAnalysis?.uiElements ?? []) {
+        occurrences.push({
+            id: generateUiOccurrenceId(
+                element.sourceFile,
+                element.span.startLine,
+                element.span.startColumn,
+                element.sourceElement
+            ),
+            sourceFile: element.sourceFile,
+            span: element.span,
+            sourceElement: element.sourceElement,
+            role: classifyUiRole(element.sourceElement, element.attributeValues),
+            properties: element.properties,
+            events: element.events,
+            states: element.states,
+            accessibilityRequirements: element.accessibilityRequirements,
+            bindingReferences: element.bindingReferences,
+        });
+    }
+
+    for (const component of angularAnalysis?.components ?? []) {
+        for (const element of component.templateElements) {
+            const propertyNames = [...element.attributes, ...element.inputs];
+            occurrences.push({
+                id: generateUiOccurrenceId(
+                    element.sourceFile,
+                    element.span.startLine,
+                    element.span.startColumn,
+                    element.name
+                ),
+                sourceFile: element.sourceFile,
+                span: element.span,
+                sourceElement: element.name,
+                role: classifyUiRole(element.name, element.attributeValues),
+                properties: [...new Set(propertyNames)],
+                events: element.outputs,
+                states: propertyNames.filter((name) =>
+                    ['disabled', 'checked', 'selected', 'readonly', 'required', 'loading', 'value']
+                        .includes(name.toLowerCase())
+                ),
+                accessibilityRequirements: propertyNames.filter((name) =>
+                    name.startsWith('aria-') ||
+                    ['role', 'tabindex', 'alt', 'label'].includes(name.toLowerCase())
+                ),
+                bindingReferences: [
+                    ...element.inputs.map((name) => `[${name}]`),
+                    ...element.outputs.map((name) => `(${name})`),
+                ],
+            });
+        }
+    }
+
+    return occurrences.sort((left, right) => left.id.localeCompare(right.id));
+}
+
+function generateUiOccurrenceId(
+    sourceFile: string,
+    line: number,
+    column: number,
+    sourceElement: string
+): string {
+    const pathPart = sourceFile.replace(/[^a-zA-Z0-9._-]/g, '_');
+    const elementPart = sourceElement.replace(/[^a-zA-Z0-9._-]/g, '_');
+    return `${pathPart}:${line}:${column}:${elementPart}`;
+}
+
+function classifyUiRole(
+    sourceElement: string,
+    attributeValues: Readonly<Record<string, string>>
+): UiSemanticRole {
+    const element = sourceElement.toLowerCase();
+    if (element === 'input') {
+        const inputType = attributeValues['type']?.toLowerCase();
+        if (inputType === 'checkbox') return 'checkbox';
+        if (inputType === 'radio') return 'radio';
+        return 'input';
+    }
+    const roles: Readonly<Record<string, UiSemanticRole>> = {
+        button: 'button',
+        textarea: 'textarea',
+        select: 'select',
+        a: 'link',
+        table: 'table',
+        dialog: 'modal',
+        article: 'card',
+        form: 'form',
+        menu: 'menu',
+    };
+    return roles[element] ?? 'native-other';
+}
+
+function determineCoverage(
+    framework: FrameworkEvidence,
+    files: readonly SourceFile[],
+    findings: readonly AnalyzerFinding[],
+    uiOccurrences: readonly UiOccurrence[]
+): InventoryCoverage {
+    if (framework.framework === 'unknown' || framework.framework === 'mixed') {
+        return 'unknown';
+    }
+    const hasFailedFiles = files.some(({ disposition }) => disposition === 'failed');
+    const hasCoverageGap = findings.some(({ code, severity }) =>
+        severity === 'error' ||
+        code.includes('PARSE_ERROR') ||
+        code.includes('DYNAMIC') ||
+        code.includes('UNAVAILABLE') ||
+        code.includes('ANALYSIS_ERROR') ||
+        code === 'ANALYSIS_ZERO_UI_PARTIAL'
+    );
+    return hasFailedFiles || hasCoverageGap || uiOccurrences.length === 0
+        ? 'partial'
+        : 'complete';
 }
 
 /**
@@ -368,7 +515,10 @@ function composeOccurrences(
                 type: comp.isPage ? 'page' : 'component',
                 name: comp.name,
                 sourceFile: comp.sourceFile,
-                startLine: 0,
+                startLine: comp.span.startLine,
+                endLine: comp.span.endLine,
+                startCol: comp.span.startColumn,
+                endCol: comp.span.endColumn,
                 evidence: [`React ${comp.isPage ? 'page' : 'component'} declaration`],
             });
         });
@@ -378,8 +528,11 @@ function composeOccurrences(
             occurrences.push({
                 type: 'route',
                 name: route.path,
-                sourceFile: '',
-                startLine: 0,
+                sourceFile: route.sourceFile,
+                startLine: route.span.startLine,
+                endLine: route.span.endLine,
+                startCol: route.span.startColumn,
+                endCol: route.span.endColumn,
                 evidence: [`React Router 6/7 route: ${route.path}`],
             });
         });
@@ -435,8 +588,13 @@ function composeOccurrences(
     if (angularAnalysis) {
         // Components
         angularAnalysis.components.forEach((comp) => {
+            const isPage = angularAnalysis.routes.some(
+                (route) =>
+                    route.component?.includes(comp.name) === true ||
+                    route.loadComponent?.includes(comp.name) === true
+            );
             occurrences.push({
-                type: 'component',
+                type: isPage ? 'page' : 'component',
                 name: comp.name,
                 sourceFile: comp.sourceFile,
                 startLine: 0,
@@ -451,7 +609,7 @@ function composeOccurrences(
             occurrences.push({
                 type: 'route',
                 name: route.path,
-                sourceFile: '',
+                sourceFile: route.sourceFile,
                 startLine: 0,
                 evidence: [`Angular route: ${route.path}`],
             });
@@ -522,7 +680,7 @@ function composeOccurrences(
     styleAnalysis.globalStyles.forEach((style) => {
         occurrences.push({
             type: 'style',
-            name: style.path.split('/').pop() || 'global',
+            name: style.path.split('/').pop() ?? 'global',
             sourceFile: style.path,
             startLine: 0,
             evidence: [`Global stylesheet with ${style.selectors.length} selectors`],
@@ -533,7 +691,7 @@ function composeOccurrences(
     styleAnalysis.assets.forEach((asset) => {
         occurrences.push({
             type: 'asset',
-            name: asset.url.split('/').pop() || asset.url,
+            name: asset.url.split('/').pop() ?? asset.url,
             sourceFile: asset.sourceFile,
             startLine: asset.lineNumber,
             evidence: [`Asset reference: ${asset.url} (${asset.type})`],
@@ -547,13 +705,12 @@ function composeOccurrences(
  * Generate deterministic occurrence ID
  */
 function generateOccurrenceId(
-    occ: Omit<DetectedOccurrence, 'id'>,
-    index: number
+    occ: Omit<DetectedOccurrence, 'id'>
 ): string {
-    // Format: path:type:name:line:index
+    // Format is derived only from source identity and span, never traversal order.
     const sanitizedPath = occ.sourceFile.replace(/[\\/:]/g, '_');
     const sanitizedName = occ.name.replace(/[^a-zA-Z0-9]/g, '_');
-    return `${sanitizedPath}:${occ.type}:${sanitizedName}:${occ.startLine}:${index}`;
+    return `${sanitizedPath}:${occ.type}:${sanitizedName}:${occ.startLine}:${occ.startCol ?? 0}:${occ.endLine ?? 0}:${occ.endCol ?? 0}`;
 }
 
 /**
@@ -570,7 +727,7 @@ function collectUnparsedRegions(
 
     for (const file of inventory.files) {
         if (
-            file.disposition.includes('script') &&
+            file.roles.includes('script') &&
             !occurrencePaths.has(file.path)
         ) {
             unparsed.push({
@@ -588,7 +745,7 @@ function collectUnparsedRegions(
  * Extract project name from root directory
  */
 function extractProjectName(rootDir: string): string {
-    const parts = rootDir.split(/[\\\/]/);
+    const parts = rootDir.split(/[\\/]/);
     const lastPart = parts[parts.length - 1];
-    return lastPart || 'unknown';
+    return lastPart ?? 'unknown';
 }

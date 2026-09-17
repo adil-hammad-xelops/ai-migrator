@@ -8,6 +8,7 @@
         "src/**/*.ts"
     ],
     "exclude": [
+        "src/generator/templates/**",
         "tests/**/*",
         "**/*.test.ts"
     ]

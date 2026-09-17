@@ -31,6 +31,7 @@
         "vitest.config.ts"
     ],
     "exclude": [
+        "src/generator/templates/**",
         "tests/fixtures/react-supported/**",
         "tests/fixtures/angular-supported/**"
     ]

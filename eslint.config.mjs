@@ -9,6 +9,7 @@ export default tseslint.config(
             "node_modules/**",
             "coverage/**",
             "profiles/**/generated/**",
+            "src/generator/templates/**",
             "jobs/**",
             "eslint.config.mjs",
             "profiles/**/*.d.ts",

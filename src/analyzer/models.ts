@@ -64,6 +64,7 @@ export type UiSemanticRole =
     | "link"
     | "table"
     | "modal"
+    | "card"
     | "tabs"
     | "menu"
     | "form"

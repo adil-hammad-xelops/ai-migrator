@@ -24,7 +24,21 @@ function splitTopLevelArgs(text: string): string[] {
     const args: string[] = [];
     let depth = 0;
     let current = "";
+    let quote: "\"" | "'" | null = null;
+    let escaped = false;
     for (const ch of text) {
+        if (quote !== null) {
+            current += ch;
+            if (escaped) escaped = false;
+            else if (ch === "\\") escaped = true;
+            else if (ch === quote) quote = null;
+            continue;
+        }
+        if (ch === "\"" || ch === "'") {
+            quote = ch;
+            current += ch;
+            continue;
+        }
         if (ch === "<" || ch === "{" || ch === "[" || ch === "(") {
             depth += 1;
         } else if (ch === ">" || ch === "}" || ch === "]" || ch === ")") {
@@ -156,7 +170,11 @@ export function buildPackageEvidence(
             d.selector
                 .split(",")
                 .map((clause) => clause.trim())
-                .some((clause) => clause === entry.selector || clause.includes(`[${entry.selector}]`))
+                .some((clause) =>
+                    clause === entry.selector ||
+                    clause.includes(`[${entry.selector}]`) ||
+                    (entry.id === "input" && clause.includes("[xlpInput]"))
+                )
         );
 
         if (matchingDeclaration === undefined) {
