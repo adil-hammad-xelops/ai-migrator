@@ -160,3 +160,16 @@ claim a task complete before its stated acceptance check has actually passed.
   including the affected behavior and source files when known. The planner accepts no
   source scripts or lockfile contents for copying.
 - Verification: five focused dependency tests, strict typecheck and full lint pass.
+
+## T033 Status: Deterministic Angular emitter (2026-09-17)
+
+- Added exhaustive architecture-v1 path allocation for routed pages, feature-owned code,
+  reusable shared code, application-wide core code and layouts. Feature-owned units fail
+  when no explicit feature is provided; source directory shape is never reused.
+- Name collisions receive a stable source-path hash suffix. Unit and guard imports are
+  explicit and sorted; route parameters are retained/appended, guards have verified module
+  locations, and lazy component imports point into the owning feature.
+- Every emitted file has deterministic content/SHA-256 and sorted source associations.
+  Reversing input order produces identical output.
+- Verification: three focused emitter tests, all 39 unit tests, strict typecheck, full lint
+  and backend production build pass.
