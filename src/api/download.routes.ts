@@ -1,6 +1,8 @@
 /**
  * Download routes (T056): GET /api/migrations/{migrationId}/download
  * Returns published final artifact as ZIP stream with proper headers.
+ * 
+ * T061: Extended with diagnostic endpoint for failed migrations.
  */
 
 import type { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
@@ -8,6 +10,9 @@ import type { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
 export interface DownloadService {
     getDownloadStatus(migrationId: string): Promise<{ available: boolean; reason?: string } | null>;
     downloadArtifact(migrationId: string): Promise<Buffer | null>;
+    // T061: Diagnostic support for failed attempts
+    getDiagnosticStatus(migrationId: string): Promise<{ available: boolean; reason?: string } | null>;
+    getDiagnosticArtifact(migrationId: string): Promise<Buffer | null>;
 }
 
 export interface DownloadDependencies {
@@ -103,6 +108,85 @@ export function registerDownloadRoutes(
             } catch (error) {
                 const message = error instanceof Error ? error.message : String(error);
                 console.error(`Download error for ${request.params.migrationId}:`, message);
+                return reply.code(503).send({
+                    error: "Service unavailable",
+                    details: message
+                });
+            }
+        }
+    );
+
+    /**
+     * GET /api/migrations/{migrationId}/diagnostic
+     * Download diagnostic archive for failed migrations (T061).
+     * Only available for failed attempts; successful migrations return 409.
+     *
+     * Responses:
+     * - 200: Success, diagnostic ZIP stream
+     * - 400: Invalid UUID format
+     * - 401: Missing or invalid authorization
+     * - 404: Migration not found or has no diagnostic
+     * - 409: Migration succeeded or failed without recoverable diagnostics
+     * - 503: Service unavailable
+     */
+    app.get<{ Params: { migrationId: string } }>(
+        "/api/migrations/:migrationId/diagnostic",
+        async (request: FastifyRequest<{ Params: { migrationId: string } }>, reply: FastifyReply) => {
+            try {
+                const { migrationId } = request.params;
+
+                // Validate UUID format
+                if (!isValidUUID(migrationId)) {
+                    return reply.code(400).send({
+                        error: "Invalid migrationId format",
+                        details: "migrationId must be a valid UUID v4"
+                    });
+                }
+
+                // Check diagnostic status
+                const status = await service.getDiagnosticStatus(migrationId);
+                if (status === null) {
+                    // Migration not found
+                    return reply.code(404).send({
+                        error: "Migration not found",
+                        migrationId
+                    });
+                }
+
+                if (!status.available) {
+                    // Successful migration or no recoverable diagnostics
+                    if (status.reason === "success") {
+                        return reply.code(409).send({
+                            error: "Cannot download diagnostics for successful migration",
+                            reason: "success"
+                        });
+                    }
+                    return reply.code(404).send({
+                        error: "Diagnostic not available",
+                        reason: status.reason ?? "unknown"
+                    });
+                }
+
+                // Download the diagnostic artifact
+                const artifact = await service.getDiagnosticArtifact(migrationId);
+                if (!artifact) {
+                    return reply.code(404).send({
+                        error: "Diagnostic archive not found",
+                        migrationId
+                    });
+                }
+
+                // Set response headers for file download
+                reply.header("Content-Type", "application/zip");
+                reply.header("Content-Length", artifact.length);
+                reply.header("Content-Disposition", `attachment; filename="migration-${migrationId}-INCOMPLETE.zip"`);
+                reply.header("Cache-Control", "private, max-age=3600");
+
+                // Send diagnostic artifact
+                return reply.send(artifact);
+            } catch (error) {
+                const message = error instanceof Error ? error.message : String(error);
+                console.error(`Diagnostic error for ${request.params.migrationId}:`, message);
                 return reply.code(503).send({
                     error: "Service unavailable",
                     details: message

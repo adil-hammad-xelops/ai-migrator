@@ -1,8 +1,15 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 
+/**
+ * T061: Migration status endpoint reflects historical outcome immutably.
+ * Outcome is NOT inferred from current artifact existence.
+ * Artifact/diagnostic availability is current projection (may be expired).
+ */
+
 interface AcceptedJob {
     readonly migrationId: string;
     readonly state: "accepted" | "running" | "completed" | "failed";
+    readonly outcome?: "success" | "failed"; // T061: Historical outcome (immutable)
     readonly [key: string]: unknown;
 }
 
@@ -23,11 +30,13 @@ function pendingStatus(job: AcceptedJob): Record<string, unknown> {
     return {
         migrationId: job.migrationId,
         state: job.state,
+        outcome: job.outcome, // T061: Historical immutable outcome, not inferred from files
         reportAvailable: false,
         currentStage: null,
         stages: [],
         counts: { detected: 0, mapped: 0, unmapped: 0, manualReview: 0 },
         coverage: "unknown",
+        // T061: These are current projections, not outcome basis
         finalArtifact: { available: false, url: null, sha256: null, bytes: null, expiresAt: null },
         diagnosticArtifact: { available: false, url: null, sha256: null, bytes: null, expiresAt: null },
         warnings: [],

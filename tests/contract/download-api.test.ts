@@ -41,11 +41,13 @@ function createFakeDownloadService() {
     const artifacts = new Map<string, Buffer>();
     const activeMigrations = new Set<string>();
     const failedMigrations = new Set<string>();
+    const diagnostics = new Map<string, Buffer>();
 
     return {
         artifacts,
         activeMigrations,
         failedMigrations,
+        diagnostics,
         getDownloadStatus(migrationId: string) {
             if (activeMigrations.has(migrationId)) {
                 return Promise.resolve({ available: false, reason: "active" });
@@ -61,6 +63,23 @@ function createFakeDownloadService() {
         },
         downloadArtifact(migrationId: string) {
             return Promise.resolve(artifacts.get(migrationId) ?? null);
+        },
+        // T061: Diagnostic support
+        getDiagnosticStatus(migrationId: string) {
+            if (failedMigrations.has(migrationId) && diagnostics.has(migrationId)) {
+                return Promise.resolve({ available: true, bytes: diagnostics.get(migrationId)!.length });
+            }
+            if (activeMigrations.has(migrationId)) {
+                return Promise.resolve({ available: false, reason: "active" });
+            }
+            if (artifacts.has(migrationId)) {
+                // Successful migrations have no diagnostics
+                return Promise.resolve({ available: false, reason: "success" });
+            }
+            return Promise.resolve(null);
+        },
+        getDiagnosticArtifact(migrationId: string) {
+            return Promise.resolve(diagnostics.get(migrationId) ?? null);
         }
     };
 }
@@ -188,7 +207,7 @@ describe("GET /api/migrations/{migrationId}/download", () => {
         const zip2 = Buffer.from("ZIP2");
         service.artifacts.set(id1, zip1);
         service.artifacts.set(id2, zip2);
-        
+
         const app = await buildTestApp(service);
         const response1 = await app.inject({
             method: "GET",
@@ -200,7 +219,7 @@ describe("GET /api/migrations/{migrationId}/download", () => {
             url: `/api/migrations/${id2}/download`,
             headers: { authorization: `Bearer ${BEARER_TOKEN}` }
         });
-        
+
         if (response1.statusCode === 200 && response2.statusCode === 200) {
             // Should return different artifacts
             expect(response1.rawPayload).not.toEqual(response2.rawPayload);
