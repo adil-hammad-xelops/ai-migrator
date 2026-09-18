@@ -156,12 +156,12 @@ Checkpoint: reporter/service tests prove both formats independently using typed 
 Goal: verified archives atomically published with matching terminal reports.
 Independent test: download a final archive, inspect exclusions and rebuild/exercise it in isolation.
 
-- [ ] T051 [P] [US3] Add `tests/contract/download-api.test.ts` for authenticated final ZIP 200, active/failed 409, unknown/expired 404, correct media/disposition and cross-job isolation.
-- [ ] T052 [P] [US3] Add `tests/integration/export.test.ts` for approved entries, unsafe path/secret exclusions, interrupted streams and tampered archive verification; require both report files and new target lockfile.
-- [ ] T053 [US3] Implement `src/exporter/artifact-inventory.ts` with explicit approved file/hash list: one project root, source/assets/config/lockfile/README/reports; exclude node_modules/build/cache/tmp/logs/VCS/credentials. Acceptance: no unrestricted workspace walk determines ZIP contents.
-- [ ] T054 [US3] Implement `src/exporter/zip-exporter.ts` and `scripts/verify-artifact.mjs` with Archiver streaming, awaited completion, reopened entry/hash validation and byte/SHA metadata. Acceptance: corruption, extra/missing entries and stream errors reject the artifact.
-- [ ] T055 [US3] Complete success publication in `src/api/migration-service.ts` and `src/api/migration-store.ts`: require no required-behavior blocker, six passed gates, two reports and verified final ZIP before atomic terminal pointer. Acceptance: kill/fault injection before publication never exposes completed or a success candidate report.
-- [ ] T056 [US3] Implement `src/api/download.routes.ts` final streaming with download leases and safe ID-to-artifact lookup; register in `src/api/app.ts`. Acceptance: T051/T052 pass; response starts only for verified available artifacts and cleanup cannot delete a leased file.
+- [x] T051 [P] [US3] Add `tests/contract/download-api.test.ts` for authenticated final ZIP 200, active/failed 409, unknown/expired 404, correct media/disposition and cross-job isolation.
+- [x] T052 [P] [US3] Add `tests/integration/export.test.ts` for approved entries, unsafe path/secret exclusions, interrupted streams and tampered archive verification; require both report files and new target lockfile.
+- [x] T053 [US3] Implement `src/exporter/artifact-inventory.ts` with explicit approved file/hash list: one project root, source/assets/config/lockfile/README/reports; exclude node_modules/build/cache/tmp/logs/VCS/credentials. Acceptance: no unrestricted workspace walk determines ZIP contents.
+- [x] T054 [US3] Implement `src/exporter/zip-exporter.ts` and `scripts/verify-artifact.mjs` with Archiver streaming, awaited completion, reopened entry/hash validation and byte/SHA metadata. Acceptance: corruption, extra/missing entries and stream errors reject the artifact.
+- [x] T055 [US3] Complete success publication in `src/api/migration-service.ts` and `src/api/migration-store.ts`: require no required-behavior blocker, six passed gates, two reports and verified final ZIP before atomic terminal pointer. Acceptance: kill/fault injection before publication never exposes completed or a success candidate report.
+- [x] T056 [US3] Implement `src/api/download.routes.ts` final streaming with download leases and safe ID-to-artifact lookup; register in `src/api/app.ts`. Acceptance: T051/T052 pass; response starts only for verified available artifacts and cleanup cannot delete a leased file.
 
 Checkpoint: US1+US2+US3 success path is usable; US4 remains required for production readiness.
 
