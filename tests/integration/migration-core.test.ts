@@ -2,6 +2,12 @@ import { describe, expect, it } from "vitest";
 import path from "node:path";
 import { readFile } from "node:fs/promises";
 import { analyzeProject } from "../../src/analyzer/analyzer.js";
+import type { MappingPlan } from "../../src/mapper/models.js";
+import { createMappingPlan } from "../../src/mapper/mapper.js";
+import type { CatalogSnapshot, PackageEvidence } from "../../src/catalog/models.js";
+import type { TargetProfile } from "../../src/validator/models.js";
+import { validateProject } from "../../src/validator/validator.js";
+import { admitProfile } from "../../src/validator/profile-admission.js";
 
 interface ExpectedFixture {
     readonly framework: string;
@@ -182,5 +188,232 @@ describe("migration-core analyzer acceptance", () => {
                 return counts;
             }, {});
         expect(normalizedRoleCounts).toEqual(expected.detectedUiElementRoleCounts);
+    });
+});
+
+describe("migration-core full pipeline", () => {
+    it("maps React fixture occurrences with compatibility evaluation", async () => {
+        const root = path.join(import.meta.dirname, "..", "fixtures", "react-supported");
+        const analyzed = await analyzeProject(root);
+
+        expect(analyzed.uiOccurrences.length).toBeGreaterThan(0);
+
+        // Create minimal mock catalog for testing
+        const mockCatalog: CatalogSnapshot = {
+            revision: "1.0.0",
+            sha256: "0000000000000000000000000000000000000000000000000000000000000000",
+            rawBytes: "",
+            entryCount: 0,
+            entries: [],
+            metadataDiagnostics: [],
+        };
+
+        const mockEvidence: PackageEvidence = {
+            packageName: "@xelops/ui-angular",
+            packageVersion: "0.0.5",
+            integrity: "sha512-...",
+            verifiedExports: [],
+            verifiedMembers: [],
+            selectorConflicts: [],
+        };
+
+        // Should not throw and should produce one decision per occurrence
+        const mappingPlan = createMappingPlan(analyzed, mockCatalog, mockEvidence);
+        expect(mappingPlan.decisions.length).toBe(analyzed.uiOccurrences.length);
+
+        // Count by status
+        const mapped = mappingPlan.decisions.filter((d) => d.status === "mapped").length;
+        const unmapped = mappingPlan.decisions.filter((d) => d.status === "unmapped").length;
+        const manualReview = mappingPlan.decisions.filter((d) => d.status === "manual-review").length;
+        expect(mapped + unmapped + manualReview).toBe(analyzed.uiOccurrences.length);
+    });
+
+    it("maps Angular fixture occurrences with compatibility evaluation", async () => {
+        const root = path.join(import.meta.dirname, "..", "fixtures", "angular-supported");
+        const analyzed = await analyzeProject(root);
+
+        expect(analyzed.uiOccurrences.length).toBeGreaterThan(0);
+
+        // Create minimal mock catalog for testing
+        const mockCatalog: CatalogSnapshot = {
+            revision: "1.0.0",
+            sha256: "0000000000000000000000000000000000000000000000000000000000000000",
+            rawBytes: "",
+            entryCount: 0,
+            entries: [],
+            metadataDiagnostics: [],
+        };
+
+        const mockEvidence: PackageEvidence = {
+            packageName: "@xelops/ui-angular",
+            packageVersion: "0.0.5",
+            integrity: "sha512-...",
+            verifiedExports: [],
+            verifiedMembers: [],
+            selectorConflicts: [],
+        };
+
+        // Should not throw and should produce one decision per occurrence
+        const mappingPlan = createMappingPlan(analyzed, mockCatalog, mockEvidence);
+        expect(mappingPlan.decisions.length).toBe(analyzed.uiOccurrences.length);
+
+        // Count by status
+        const mapped = mappingPlan.decisions.filter((d) => d.status === "mapped").length;
+        const unmapped = mappingPlan.decisions.filter((d) => d.status === "unmapped").length;
+        const manualReview = mappingPlan.decisions.filter((d) => d.status === "manual-review").length;
+        expect(mapped + unmapped + manualReview).toBe(analyzed.uiOccurrences.length);
+    });
+
+    it("validates profile admission for React fixture", async () => {
+        const admissionResult = await admitProfile({
+            profileId: "xelops-angular-v1-lts-2024",
+            requiredVersions: {
+                angular: "20.0.0",
+                typescript: "5.9.0",
+                rxjs: "7.0.0",
+            },
+            lockfileHash: "",
+        });
+
+        // Profile should be properly classified
+        expect(["admitted", "expired", "incompatible", "unverified"]).toContain(
+            admissionResult.status
+        );
+
+        if (admissionResult.status === "admitted") {
+            expect(admissionResult.profileExists).toBe(true);
+            expect(admissionResult.versionsCompatible).toBe(true);
+            expect(admissionResult.supportNotExpired).toBe(true);
+        }
+    });
+
+    it("runs all six validator gates for React fixture", async () => {
+        // Note: This test creates a mock profile for testing gate execution
+        const mockProfile: TargetProfile = {
+            profileId: "xelops-angular-v1-lts-2024",
+            architectureRevision: "xelops-angular-v1",
+            packages: [
+                { name: "@angular/core", version: "20.3.15", integrity: "sha512-..." },
+                { name: "typescript", version: "5.9.3", integrity: "sha512-..." },
+            ],
+            lockfileSha256: "0000000000000000000000000000000000000000000000000000000000000000",
+            supportExpiresAt: "2027-12-31T23:59:59Z",
+            admissionStatus: "admitted",
+            admissionChecks: [],
+        };
+
+        const projectPath = path.join(import.meta.dirname, "..", "fixtures", "react-supported");
+        const result = await validateProject({
+            projectPath,
+            profile: mockProfile,
+            timeoutMs: 60000,
+            diagnosticBytesLimit: 1024 * 1024,
+            runTests: false, // Zero required tests
+        });
+
+        // Six gates should be executed
+        expect(result.gateResults).toHaveLength(6);
+
+        // Gates should be in order
+        const gateOrder = result.gateResults.map((g) => g.gate);
+        expect(gateOrder).toEqual([
+            "installation",
+            "typescript",
+            "angular-build",
+            "lint",
+            "tests",
+            "xelops-compliance",
+        ]);
+
+        // Each gate should have a status
+        for (const gate of result.gateResults) {
+            expect(["passed", "failed", "skipped"]).toContain(gate.status);
+        }
+    });
+
+    it("runs all six validator gates for Angular fixture", async () => {
+        // Note: This test creates a mock profile for testing gate execution
+        const mockProfile: TargetProfile = {
+            profileId: "xelops-angular-v1-lts-2024",
+            architectureRevision: "xelops-angular-v1",
+            packages: [
+                { name: "@angular/core", version: "20.3.15", integrity: "sha512-..." },
+                { name: "typescript", version: "5.9.3", integrity: "sha512-..." },
+            ],
+            lockfileSha256: "0000000000000000000000000000000000000000000000000000000000000000",
+            supportExpiresAt: "2027-12-31T23:59:59Z",
+            admissionStatus: "admitted",
+            admissionChecks: [],
+        };
+
+        const projectPath = path.join(import.meta.dirname, "..", "fixtures", "angular-supported");
+        const result = await validateProject({
+            projectPath,
+            profile: mockProfile,
+            timeoutMs: 60000,
+            diagnosticBytesLimit: 1024 * 1024,
+            runTests: false,
+        });
+
+        // Six gates should be executed
+        expect(result.gateResults).toHaveLength(6);
+
+        // Each gate should have a status
+        for (const gate of result.gateResults) {
+            expect(["passed", "failed", "skipped"]).toContain(gate.status);
+        }
+    });
+
+    it("maintains deterministic occurrence IDs across analysis runs", async () => {
+        const root = path.join(import.meta.dirname, "..", "fixtures", "react-supported");
+
+        const run1 = await analyzeProject(root);
+        const run2 = await analyzeProject(root);
+        const run3 = await analyzeProject(root);
+
+        const ids1 = run1.uiOccurrences.map((o) => o.id).sort();
+        const ids2 = run2.uiOccurrences.map((o) => o.id).sort();
+        const ids3 = run3.uiOccurrences.map((o) => o.id).sort();
+
+        expect(ids1).toEqual(ids2);
+        expect(ids2).toEqual(ids3);
+    });
+
+    it("preserves mapping decision integrity across runs", async () => {
+        const root = path.join(import.meta.dirname, "..", "fixtures", "react-supported");
+
+        const mockCatalog: CatalogSnapshot = {
+            revision: "1.0.0",
+            sha256: "0000000000000000000000000000000000000000000000000000000000000000",
+            rawBytes: "",
+            entryCount: 0,
+            entries: [],
+            metadataDiagnostics: [],
+        };
+
+        const mockEvidence: PackageEvidence = {
+            packageName: "@xelops/ui-angular",
+            packageVersion: "0.0.5",
+            integrity: "sha512-...",
+            verifiedExports: [],
+            verifiedMembers: [],
+            selectorConflicts: [],
+        };
+
+        const analyzed1 = await analyzeProject(root);
+        const mapping1 = createMappingPlan(analyzed1, mockCatalog, mockEvidence);
+
+        const analyzed2 = await analyzeProject(root);
+        const mapping2 = createMappingPlan(analyzed2, mockCatalog, mockEvidence);
+
+        expect(mapping1.decisions.length).toBe(mapping2.decisions.length);
+
+        // Same occurrences should have same decisions
+        for (let i = 0; i < mapping1.decisions.length; i++) {
+            const d1 = mapping1.decisions[i];
+            const d2 = mapping2.decisions[i];
+            expect(d1?.occurrenceId).toBe(d2?.occurrenceId);
+            expect(d1?.status).toBe(d2?.status);
+        }
     });
 });
