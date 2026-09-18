@@ -42,7 +42,7 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
     const { config } = options;
     const app = Fastify({
         logger: true,
-        bodyLimit: config.maxCompressedUploadBytes + 64 * 1024,
+        bodyLimit: config.maxCompressedUploadBytes,
         trustProxy: false
     });
 
@@ -60,12 +60,44 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
         keyGenerator: (request: FastifyRequest): string => extractBearerToken(request) ?? request.ip
     });
 
+    // Register content-type parser for binary uploads
+    // Match both explicit and implicit binary types
+    const createBinaryParser = (maxBytes: number) => async (_request: FastifyRequest, payload: unknown): Promise<Buffer> => {
+        const chunks: Buffer[] = [];
+        let totalBytes = 0;
+        for await (const chunk of payload as AsyncIterable<Buffer>) {
+            totalBytes += chunk.length;
+            if (totalBytes > maxBytes) {
+                // Create an error object that Fastify will handle
+                const error = Object.assign(new Error(`Request body size exceeds limit of ${maxBytes} bytes`), {
+                    statusCode: 413,
+                    code: "PAYLOAD_TOO_LARGE"
+                });
+                throw error;
+            }
+            chunks.push(chunk);
+        }
+        return Buffer.concat(chunks);
+    };
+
+    const binaryParser = createBinaryParser(config.maxCompressedUploadBytes);
+
+    for (const contentType of ["application/octet-stream", "application/zip", "application/x-zip-compressed", "text/plain"]) {
+        app.addContentTypeParser(contentType, binaryParser);
+    }
+
     // Runs before route matching resolves, so unauthenticated requests can never reach a
     // handler — including for status/report/download routes registered by later tasks.
+    // Also sets default content-type for binary uploads without explicit content-type.
     app.addHook("onRequest", async (request, reply) => {
         const token = extractBearerToken(request);
         if (token === null || !isValidToken(token, config.authToken)) {
             await reply.code(401).send({ code: "UNAUTHORIZED", message: "missing or invalid bearer token" });
+        }
+        // Set default content-type for requests without one
+        // This must happen before Fastify tries to parse the content-type
+        if (!request.headers["content-type"]) {
+            (request.headers as Record<string, string>)["content-type"] = "text/plain";
         }
     });
 

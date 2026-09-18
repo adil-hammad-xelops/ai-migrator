@@ -1,9 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { buildApp } from "../../src/api/app.js";
 import type { AppConfig } from "../../src/api/config.js";
-// NOTE: migration.routes.ts does not exist yet (T044). This import intentionally fails
-// today (TDD red); do not stub/mock the route module itself to make this pass early.
-// @ts-expect-error -- module does not exist until T044
 import { registerMigrationRoutes } from "../../src/api/migration.routes.js";
 
 function testConfig(overrides: Partial<AppConfig> = {}): AppConfig {
