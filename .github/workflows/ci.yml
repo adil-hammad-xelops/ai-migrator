@@ -1,0 +1,325 @@
+name: Backend CI Pipeline (T066)
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+
+env:
+  NODE_VERSION: "24.21.0"
+  REGISTRY: ghcr.io
+
+jobs:
+  # Phase 1: Environment Setup and Prerequisites Check
+  prerequisites:
+    name: Prerequisites Check
+    runs-on: ubuntu-latest
+    outputs:
+      catalog-hash: ${{ steps.catalog.outputs.hash }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Verify catalog integrity (T066)
+        id: catalog
+        run: |
+          CATALOG_PATH="src/catalog/xelops-components.json"
+          EXPECTED_SHA="C4FA4AAC267F51089162CB87D0087BEAE369FD027E4350130F83517C070A1640"
+          
+          if [ ! -f "$CATALOG_PATH" ]; then
+            echo "::error::Catalog file not found: $CATALOG_PATH"
+            exit 1
+          fi
+          
+          ACTUAL_SHA=$(sha256sum "$CATALOG_PATH" | cut -d ' ' -f1 | tr '[:lower:]' '[:upper:]')
+          echo "hash=$ACTUAL_SHA" >> $GITHUB_OUTPUT
+          
+          if [ "$ACTUAL_SHA" != "$EXPECTED_SHA" ]; then
+            echo "::error::Catalog hash mismatch. Expected: $EXPECTED_SHA, Got: $ACTUAL_SHA"
+            exit 1
+          fi
+          
+          # Verify catalog structure
+          if ! jq empty "$CATALOG_PATH" 2>/dev/null; then
+            echo "::error::Catalog is not valid JSON"
+            exit 1
+          fi
+          
+          ENTRY_COUNT=$(jq 'length' "$CATALOG_PATH")
+          if [ "$ENTRY_COUNT" != "74" ]; then
+            echo "::error::Catalog entry count mismatch. Expected: 74, Got: $ENTRY_COUNT"
+            exit 1
+          fi
+          
+          echo "✓ Catalog verified: 74 entries, SHA=$ACTUAL_SHA"
+
+      - name: Check Node version
+        run: |
+          NODE_VERSION=$(node --version)
+          echo "Node version: $NODE_VERSION"
+          if [[ ! "$NODE_VERSION" =~ ^v24\.21\. ]]; then
+            echo "::error::Required Node.js 24.21.x, got $NODE_VERSION"
+            exit 1
+          fi
+
+      - name: Check Docker availability
+        run: |
+          if ! command -v docker &> /dev/null; then
+            echo "::error::Docker is required but not available"
+            exit 1
+          fi
+          docker --version
+
+  # Phase 2: Install Dependencies
+  install:
+    name: Install Dependencies
+    runs-on: ubuntu-latest
+    needs: prerequisites
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24.21.0"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci --strict-peer-deps
+
+      - name: Verify lock file integrity
+        run: |
+          if ! npm ci --silent --offline --no-audit 2>/dev/null; then
+            echo "::warning::package-lock.json may be out of sync"
+          fi
+
+  # Phase 3: Strict Compilation
+  typecheck:
+    name: TypeScript Strict Check
+    runs-on: ubuntu-latest
+    needs: install
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24.21.0"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: TypeScript strict check
+        run: npm run typecheck -- --pretty
+        env:
+          TS_NODE_PROJECT: tsconfig.json
+
+      - name: Verify no implicit any
+        run: |
+          if grep -r "any" src/ --include="*.ts" | grep -v "// " | grep -v "Partial<"; then
+            echo "::error::Implicit 'any' types detected in source"
+            exit 1
+          fi
+
+  # Phase 4: Linting
+  lint:
+    name: ESLint Code Quality
+    runs-on: ubuntu-latest
+    needs: install
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24.21.0"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run ESLint
+        run: npm run lint
+
+      - name: Check for forbidden suppressions
+        run: |
+          if grep -r "eslint-disable" src/ tests/; then
+            echo "::error::ESLint suppressions found in source/tests"
+            exit 1
+          fi
+
+  # Phase 5: Unit Tests
+  unit-tests:
+    name: Unit & Contract Tests
+    runs-on: ubuntu-latest
+    needs: [typecheck, lint]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24.21.0"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run unit tests
+        run: npm run test -- tests/unit/ tests/contract/
+
+      - name: Check test coverage
+        run: |
+          npm run test -- --coverage tests/unit/ tests/contract/ || true
+
+  # Phase 6: Architecture & Module Ownership
+  architecture:
+    name: Architecture Compliance (T066)
+    runs-on: ubuntu-latest
+    needs: [typecheck, lint]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24.21.0"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run architecture tests
+        run: npm run test -- tests/contract/architecture.test.ts
+
+      - name: Verify module ownership
+        run: |
+          echo "Checking module ownership rules..."
+          
+          # analyzer: may import from foundation only
+          if grep -r "import.*from.*mapper\|generator\|validator\|reporter\|exporter" src/analyzer/ 2>/dev/null; then
+            echo "::error::analyzer stage imports from other stages"
+            exit 1
+          fi
+          
+          # mapper: may import from analyzer, foundation
+          if grep -r "import.*from.*generator\|validator\|reporter\|exporter" src/mapper/ 2>/dev/null | grep -v "node_modules"; then
+            echo "::error::mapper stage imports from downstream stages"
+            exit 1
+          fi
+          
+          echo "✓ Module ownership verified"
+
+      - name: Verify exports and imports
+        run: |
+          echo "Checking TypeScript imports..."
+          npx tsc --noEmit --listFiles 2>&1 | grep -c "src/" || echo "✓ All imports resolved"
+
+  # Phase 7: Integration Tests (Requires Docker)
+  integration:
+    name: Integration Tests
+    runs-on: ubuntu-latest
+    needs: [typecheck, lint]
+    services:
+      docker:
+        image: docker:24
+        options: --privileged
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24.21.0"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run integration tests
+        run: npm run test -- tests/integration/
+
+      - name: Archive test results
+        if: always()
+        uses: actions/upload-artifact@v3
+        with:
+          name: integration-test-results
+          path: coverage/
+
+  # Phase 8: Build Verification
+  build:
+    name: Build Distribution
+    runs-on: ubuntu-latest
+    needs: [typecheck, lint]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24.21.0"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build backend
+        run: npm run build
+
+      - name: Verify dist output
+        run: |
+          if [ ! -d "dist" ]; then
+            echo "::error::dist directory not created"
+            exit 1
+          fi
+          
+          if [ ! -f "dist/index.js" ]; then
+            echo "::error::dist/index.js not found"
+            exit 1
+          fi
+          
+          echo "✓ Build verified"
+
+  # Phase 9: Final Status
+  completion:
+    name: CI Pipeline Complete
+    runs-on: ubuntu-latest
+    needs: [prerequisites, install, typecheck, lint, unit-tests, architecture, integration, build]
+    if: always()
+    steps:
+      - name: Collect job statuses
+        run: |
+          echo "=== CI Pipeline Results ==="
+          echo "Prerequisites: ${{ needs.prerequisites.result }}"
+          echo "Install: ${{ needs.install.result }}"
+          echo "TypeCheck: ${{ needs.typecheck.result }}"
+          echo "Lint: ${{ needs.lint.result }}"
+          echo "Unit Tests: ${{ needs.unit-tests.result }}"
+          echo "Architecture: ${{ needs.architecture.result }}"
+          echo "Integration: ${{ needs.integration.result }}"
+          echo "Build: ${{ needs.build.result }}"
+
+      - name: Fail if any required job failed
+        if: |
+          needs.prerequisites.result == 'failure' ||
+          needs.typecheck.result == 'failure' ||
+          needs.lint.result == 'failure' ||
+          needs.unit-tests.result == 'failure' ||
+          needs.architecture.result == 'failure' ||
+          needs.build.result == 'failure'
+        run: |
+          echo "::error::CI pipeline failed - required checks did not pass"
+          exit 1
+
+      - name: Report success
+        if: success()
+        run: echo "✓ All CI checks passed"

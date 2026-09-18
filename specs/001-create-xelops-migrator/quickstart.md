@@ -73,3 +73,123 @@ and confirm neither archive contains credentials, host paths, node_modules or sc
 Protocol assertions and payload shapes are defined in [OpenAPI](contracts/openapi.json).
 Acceptance tests must use independently specified source behavior, not only snapshots of
 the generator's own output. Report measured performance against plan targets separately.
+
+## Constitutional Validation (T067)
+
+Before final delivery, verify all fifteen constitution principles against the running implementation.
+Use the checklist below and document results in [implementation-notes.md](implementation-notes.md).
+
+### I. Strict TypeScript
+
+- [ ] Backend source compiles with `npm run typecheck` (no errors, not warnings-as-errors)
+- [ ] Generated projects compile with `tsc --noEmit`
+- [ ] `tsconfig.json` has `strict: true`, `noUncheckedIndexedAccess: true`, `exactOptionalPropertyTypes: true`
+- [ ] No `// @ts-ignore`, `// @ts-expect-error` or `as any` suppressions in `src/`
+
+### II. No Implicit `any`
+
+- [ ] `npm run lint` passes with zero ESLint violations
+- [ ] No `no-explicit-any` suppressions
+- [ ] No unsafe TypeScript assertions (`as unknown as Type`)
+- [ ] All catch variables are explicitly typed (from `useUnknownInCatchVariables`)
+
+### III. Separation of Concerns
+
+- [ ] Analyzer stage only imports from foundation (models, config, contracts)
+- [ ] Mapper stage imports from analyzer and foundation only
+- [ ] Generator imports from prior stages but not validator/reporter/exporter
+- [ ] Validator, reporter, exporter follow DAG order; no circular imports
+- [ ] Route handlers in `src/api/` only call through service interfaces
+
+### IV. Ordered Pipeline
+
+- [ ] Six-stage order enforced: Analyzer → Mapper → Generator → Validator → Reporter → Exporter
+- [ ] No out-of-order stage execution possible
+- [ ] Each stage produces typed output consumed by next
+- [ ] Early failure (parse/required-behavior) bypasses remaining stages
+
+### V. Catalog Authority
+
+- [ ] Catalog file exists at `src/catalog/xelops-components.json`
+- [ ] SHA-256 hash matches expected: `C4FA4AAC267F51089162CB87D0087BEAE369FD027E4350130F83517C070A1640`
+- [ ] Exactly 74 component entries (no more, no fewer)
+- [ ] Catalog is immutable; copy preserved from authorized source unchanged
+- [ ] Job metadata records catalog hash with each migration
+
+### VI. No Inventions
+
+- [ ] Only catalog-listed components eligible for generation
+- [ ] Package member evidence verified before candidate selection
+- [ ] No invented selectors, inputs, outputs or ARIA tokens
+- [ ] Unmatched components preserved as native HTML with manual-review findings
+- [ ] Input selector conflict (`xlp-input` vs `xlpInput`) not guessed; remains manual-review
+
+### VII. Explicit Unmapped
+
+- [ ] All incompatible evidence documented with source spans
+- [ ] Absent or unknown candidates retained with reason
+- [ ] No silent omissions
+- [ ] Manual-review findings include exact location in source
+
+### VIII. No Guessing
+
+- [ ] Conflicting evidence never becomes a scored guess
+- [ ] Unknown event payloads marked as findings, not invented
+- [ ] Multiple plausible candidates remain manual-review
+- [ ] No confidence scores or probability-based selection
+
+### IX. Architecture Enforcement
+
+- [ ] Generated projects use owner-approved architecture-v1
+- [ ] File ownership rules: `core/`, `shared/`, `features/`, `layouts/`
+- [ ] Generated code respects ownership; no cross-module imports
+- [ ] `architecture.test.ts` passes all module ownership checks
+
+### X. Supported Versions & Expiry
+
+- [ ] Node.js 24.21.0 LTS pinned (not floating)
+- [ ] TypeScript 5.9.3 pinned
+- [ ] Angular 20.3.x candidate profile with expiry ≤ 2026-11-28
+- [ ] Admitted profile verified for actual package exports and peer constraints
+- [ ] Expired profile fails startup with clear error message
+
+### XI. Validation Gates
+
+- [ ] Exactly six gates required: installation, typecheck, build, lint, tests, compliance
+- [ ] No successful final ZIP without all six gates passing
+- [ ] Skipped gates documented with reasons
+- [ ] Failed gate prevents success transition
+- [ ] Each gate produces ≤1 MiB diagnostics
+
+### XII. Reports on All Outcomes
+
+- [ ] Both JSON and Markdown reports for every migration
+- [ ] Reports include: job ID, framework, analysis, mapping, generation, validation results
+- [ ] Early failures (parse, required-behavior) produce reports
+- [ ] Export failures produce reports with error cause
+- [ ] No ZIP checksum embedded in reports
+
+### XIII. ZIP Verification
+
+- [ ] Final artifact reopened for verification before publication
+- [ ] SHA-256 hash checked against expected value
+- [ ] Entry count and file list match artifact inventory
+- [ ] Download only served after verified publication
+- [ ] No partial/corrupted ZIPs exposed to API
+
+### XIV. Business Logic Grounded
+
+- [ ] Analyzer behavior proved against fixture inventory
+- [ ] Mapper decisions linked to source spans
+- [ ] Generator output matches mapping plan
+- [ ] Behavior transforms proved by fixture tests
+- [ ] No placeholder stubs claimed as real behavior
+- [ ] All transform evidence traceable to source
+
+### XV. Compatible UI
+
+- [ ] Required React/Angular semantics preserved
+- [ ] Safe native fallback retained where generation unsafe
+- [ ] No invented bindings
+- [ ] Accessibility obligations honored
+- [ ] Source-linked findings document why unmapped
