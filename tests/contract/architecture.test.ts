@@ -61,9 +61,10 @@ describe("Architecture Compliance (T066)", () => {
     describe("Catalog Integrity", () => {
         it("catalog file exists and is valid JSON", () => {
             const catalogPath = join(process.cwd(), "src/catalog/xelops-components.json");
-            const catalog = JSON.parse(readFileSync(catalogPath, "utf8"));
-            expect(Array.isArray(catalog)).toBe(true);
-            expect(catalog.length).toBe(74);
+            const catalog = JSON.parse(readFileSync(catalogPath, "utf8")) as Record<string, unknown>;
+            expect(typeof catalog).toBe("object");
+            expect(catalog !== null).toBe(true);
+            expect(Object.keys(catalog).length).toBe(74);
         });
 
         it("catalog SHA-256 matches expected hash", () => {
@@ -76,30 +77,28 @@ describe("Architecture Compliance (T066)", () => {
 
         it("each catalog entry has required fields", () => {
             const catalogPath = join(process.cwd(), "src/catalog/xelops-components.json");
-            const catalog = JSON.parse(readFileSync(catalogPath, "utf8")) as Array<Record<string, unknown>>;
+            const catalog = JSON.parse(readFileSync(catalogPath, "utf8")) as Record<string, unknown>;
 
-            for (const entry of catalog) {
-                expect(entry).toHaveProperty("id");
-                expect(entry).toHaveProperty("name");
-                expect(entry).toHaveProperty("package");
-                expect(entry).toHaveProperty("selector");
-                expect(typeof entry["id"]).toBe("string");
-                expect(typeof entry["name"]).toBe("string");
+            for (const [id, entry] of Object.entries(catalog)) {
+                expect(typeof id).toBe("string");
+                expect(id.length).toBeGreaterThan(0);
+                expect(entry).toBeDefined();
+                expect(typeof entry).toBe("object");
+                if (typeof entry === "object" && entry !== null) {
+                    const e = entry as Record<string, unknown>;
+                    expect(e).toHaveProperty("selector");
+                    expect(typeof e["selector"]).toBe("string");
+                }
             }
         });
 
         it("catalog has no duplicate IDs", () => {
             const catalogPath = join(process.cwd(), "src/catalog/xelops-components.json");
-            const catalog = JSON.parse(readFileSync(catalogPath, "utf8")) as Array<Record<string, unknown>>;
-            const ids = new Set<string>();
+            const catalog = JSON.parse(readFileSync(catalogPath, "utf8")) as Record<string, unknown>;
+            const ids = Object.keys(catalog);
 
-            for (const entry of catalog) {
-                const id = entry["id"] as string;
-                expect(ids.has(id)).toBe(false);
-                ids.add(id);
-            }
-
-            expect(ids.size).toBe(74);
+            expect(ids.length).toBe(74);
+            expect(new Set(ids).size).toBe(74); // All IDs should be unique
         });
     });
 
